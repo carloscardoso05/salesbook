@@ -1,9 +1,9 @@
 package io.github.carloscardoso05.api.payment;
 
 import io.github.carloscardoso05.api.customer.CustomerRepository;
-import io.github.carloscardoso05.api.payment.dtos.CreatePaymentRequest;
-import io.github.carloscardoso05.api.payment.dtos.PaymentDto;
-import io.github.carloscardoso05.api.payment.dtos.UpdatePaymentRequest;
+import io.github.carloscardoso05.api.payment.dto.CreatePaymentRequest;
+import io.github.carloscardoso05.api.payment.dto.PaymentDto;
+import io.github.carloscardoso05.api.payment.dto.UpdatePaymentRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

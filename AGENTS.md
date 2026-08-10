@@ -29,7 +29,6 @@ cd api
 - **Spring Boot 4.1.0, Java 21, Gradle** (wrapper included).
 - **Lombok**: entities use `@Getter`/`@Setter`, controllers and services use `@RequiredArgsConstructor` for constructor injection. DTOs are Java `record` types.
 - **`.env`** is loaded by `spring-dotenv` (`me.paulschwarz:spring-dotenv-bom:5.1.0`) and supplies the `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` variables used in `application.properties`.
-- Test starters (`data-jpa-test`, `webmvc-test`, `validation-test`, `flyway-test`) are on the classpath but not yet used by any test.
 
 ## Package structure
 
@@ -47,9 +46,15 @@ Product  1──* OrderItem   (RESTRICT on delete)
 ```
 
 - Monetary fields use `numeric(12, 2)` / `BigDecimal` with `@Column(precision = 12, scale = 2)`.
-- The `Customer` entity is the only one with constructor + validation logic (`Assert` guards in setters).
+- The `Customer` and `Payment` entities have constructor + validation logic (`Assert` guards in setters).
+
+## Tests
+
+- Unit tests with **Mockito + AssertJ**, mirroring the existing suites: `CustomerServiceTest`/`PaymentServiceTest` (service layer, mocked repositories, strict stubs) and `CustomerTest`/`PaymentTest` (entity guards).
+- Test starters (`data-jpa-test`, `webmvc-test`, `validation-test`, `flyway-test`) are on the classpath but not yet used by any test.
 
 ## Known technical debt (planned improvements)
 
-- **`customer.balance` lost-update** — `PaymentService.createPayment`/`updatePayment`/`deletePayment` do a read-modify-write on the customer row with no `@Version` or `SELECT ... FOR UPDATE`, so concurrent payments for the same customer can overwrite each other. TODO: pessimistic/optimistic lock, or derive balance from the `payments` table instead of a denormalized counter. Related drift: `CustomerService.updateCustomer` lets clients set `balance` directly, so it can diverge from the real sum of payments.
+- **`customer.balance` lost-update** — was fixed with optimistic locking: `Customer` now has `@Version Instant version` (column added in `V2__add_version_to_customers.sql`), so `PaymentService.createPayment`/`updatePayment`/`deletePayment` and `CustomerService.updateCustomer` fail with `ObjectOptimisticLockingFailureException` on concurrent modification instead of silently overwriting. TODO: map that exception to `409 CONFLICT` (client retries) — nothing is implemented for it yet. Related drift: `CustomerService.updateCustomer` lets clients set `balance` directly, so it can diverge from the real sum of payments.
 - **Controllers document 404 but return 500** — `orElseThrow()` → `NoSuchElementException` → 500. TODO: global exception handler (`@RestControllerAdvice`) mapping to `404 NOT_FOUND`.
+- **`spring-dotenv` does not load `.env` in test workers** — `./gradlew test` fails with `'url' must start with "jdbc"` unless `DB_URL`/`DB_USERNAME`/`DB_PASSWORD` are exported in the shell before running.

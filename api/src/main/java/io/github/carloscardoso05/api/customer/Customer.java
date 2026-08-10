@@ -9,6 +9,7 @@ import org.hibernate.type.SqlTypes;
 import org.springframework.util.Assert;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 
 @Getter
 @Entity
@@ -26,6 +27,10 @@ public class Customer {
     @NotNull
     @Column(name = "balance", nullable = false, precision = 12, scale = 2)
     private BigDecimal balance;
+
+    @Version
+    @Column(name = "version", nullable = false)
+    private Instant version;
 
     protected Customer() {
     }

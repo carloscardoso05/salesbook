@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 @Service
@@ -30,6 +31,7 @@ public class CustomerService {
         return CustomerDto.of(customerRepository.save(customer));
     }
 
+    @Transactional
     public CustomerDto updateCustomer(Integer id, UpdateCustomerRequest request) {
         if (customerRepository.existsByNameIgnoreCaseAndIdNot(request.name(), id)) {
             throw new IllegalArgumentException("Customer with name '%s' already exists.".formatted(request.name()));

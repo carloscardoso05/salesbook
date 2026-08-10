@@ -1,8 +1,8 @@
 package io.github.carloscardoso05.api.payment;
 
-import io.github.carloscardoso05.api.payment.dtos.CreatePaymentRequest;
-import io.github.carloscardoso05.api.payment.dtos.PaymentDto;
-import io.github.carloscardoso05.api.payment.dtos.UpdatePaymentRequest;
+import io.github.carloscardoso05.api.payment.dto.CreatePaymentRequest;
+import io.github.carloscardoso05.api.payment.dto.PaymentDto;
+import io.github.carloscardoso05.api.payment.dto.UpdatePaymentRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;

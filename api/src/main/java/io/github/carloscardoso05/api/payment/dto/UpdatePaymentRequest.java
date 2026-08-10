@@ -1,4 +1,4 @@
-package io.github.carloscardoso05.api.payment.dtos;
+package io.github.carloscardoso05.api.payment.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Positive;
