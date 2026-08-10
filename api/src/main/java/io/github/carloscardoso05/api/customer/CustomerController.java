@@ -1,8 +1,8 @@
 package io.github.carloscardoso05.api.customer;
 
-import io.github.carloscardoso05.api.customer.dtos.CreateCustomerRequest;
-import io.github.carloscardoso05.api.customer.dtos.CustomerDto;
-import io.github.carloscardoso05.api.customer.dtos.UpdateCustomerRequest;
+import io.github.carloscardoso05.api.customer.dto.CreateCustomerRequest;
+import io.github.carloscardoso05.api.customer.dto.CustomerDto;
+import io.github.carloscardoso05.api.customer.dto.UpdateCustomerRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;

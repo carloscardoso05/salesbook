@@ -1,8 +1,8 @@
 package io.github.carloscardoso05.api.customer;
 
-import io.github.carloscardoso05.api.customer.dtos.CreateCustomerRequest;
-import io.github.carloscardoso05.api.customer.dtos.CustomerDto;
-import io.github.carloscardoso05.api.customer.dtos.UpdateCustomerRequest;
+import io.github.carloscardoso05.api.customer.dto.CreateCustomerRequest;
+import io.github.carloscardoso05.api.customer.dto.CustomerDto;
+import io.github.carloscardoso05.api.customer.dto.UpdateCustomerRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

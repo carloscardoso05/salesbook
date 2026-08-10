@@ -1,8 +1,8 @@
 package io.github.carloscardoso05.api.customer;
 
-import io.github.carloscardoso05.api.customer.dtos.CreateCustomerRequest;
-import io.github.carloscardoso05.api.customer.dtos.CustomerDto;
-import io.github.carloscardoso05.api.customer.dtos.UpdateCustomerRequest;
+import io.github.carloscardoso05.api.customer.dto.CreateCustomerRequest;
+import io.github.carloscardoso05.api.customer.dto.CustomerDto;
+import io.github.carloscardoso05.api.customer.dto.UpdateCustomerRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;

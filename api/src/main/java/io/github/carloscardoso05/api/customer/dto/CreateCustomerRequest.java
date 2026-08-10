@@ -1,4 +1,4 @@
-package io.github.carloscardoso05.api.customer.dtos;
+package io.github.carloscardoso05.api.customer.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
