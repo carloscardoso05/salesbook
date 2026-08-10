@@ -1,3 +1,5 @@
+HELP.md
+.env
 api/.gradle
 api/build/
 !api/gradle/wrapper/gradle-wrapper.jar
