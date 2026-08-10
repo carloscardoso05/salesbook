@@ -1,18 +1,17 @@
-package io.github.carloscardoso05.api;
+package io.github.carloscardoso05.api.payment;
 
 import io.github.carloscardoso05.api.customer.Customer;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
-import lombok.Setter;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
+import org.springframework.util.Assert;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 
 @Getter
-@Setter
 @Entity
 @Table(name = "payments")
 public class Payment {
@@ -35,5 +34,28 @@ public class Payment {
     @Column(name = "paid_at", nullable = false)
     private Instant paidAt;
 
+    protected Payment() {
+    }
 
+    public Payment(BigDecimal value, Customer customer, Instant paidAt) {
+        setValue(value);
+        setCustomer(customer);
+        setPaidAt(paidAt);
+    }
+
+    public void setValue(BigDecimal value) {
+        Assert.notNull(value, "Value cannot be null");
+        Assert.isTrue(value.compareTo(BigDecimal.ZERO) > 0, "Value cannot be negative");
+        this.value = value;
+    }
+
+    public void setCustomer(Customer customer) {
+        Assert.notNull(customer, "Customer cannot be null");
+        this.customer = customer;
+    }
+
+    public void setPaidAt(Instant paidAt) {
+        Assert.notNull(paidAt, "Paid at cannot be null");
+        this.paidAt = paidAt;
+    }
 }

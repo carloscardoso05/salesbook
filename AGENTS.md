@@ -33,9 +33,9 @@ cd api
 
 ## Package structure
 
-- **`Customer`** is the only complete vertical slice (`customer/` sub-package with entity, repository, service, controller, DTOs). Use it as the reference pattern for new features.
-- **`Product`, `Order`, `OrderItem`, and `Payment`** are entity-only stubs in the root `api` package — no repositories, services, or controllers exist yet.
-- New domain features should follow the Customer pattern: a dedicated sub-package with entity → repository → service → controller → DTOs.
+- **`Customer`** is the reference vertical slice (`customer/` sub-package with entity, repository, service, controller, DTOs). Use it as the pattern for new features.
+- **`Payment`** now also has a full vertical slice (`payment/` sub-package). **`Product`, `Order`, and `OrderItem`** are still entity-only stubs in the root `api` package — no repositories, services, or controllers exist yet.
+- New domain features should follow the Customer/Payment pattern: a dedicated sub-package with entity → repository → service → controller → DTOs.
 
 ## Entity relationships
 
@@ -48,3 +48,8 @@ Product  1──* OrderItem   (RESTRICT on delete)
 
 - Monetary fields use `numeric(12, 2)` / `BigDecimal` with `@Column(precision = 12, scale = 2)`.
 - The `Customer` entity is the only one with constructor + validation logic (`Assert` guards in setters).
+
+## Known technical debt (planned improvements)
+
+- **`customer.balance` lost-update** — `PaymentService.createPayment`/`updatePayment`/`deletePayment` do a read-modify-write on the customer row with no `@Version` or `SELECT ... FOR UPDATE`, so concurrent payments for the same customer can overwrite each other. TODO: pessimistic/optimistic lock, or derive balance from the `payments` table instead of a denormalized counter. Related drift: `CustomerService.updateCustomer` lets clients set `balance` directly, so it can diverge from the real sum of payments.
+- **Controllers document 404 but return 500** — `orElseThrow()` → `NoSuchElementException` → 500. TODO: global exception handler (`@RestControllerAdvice`) mapping to `404 NOT_FOUND`.
