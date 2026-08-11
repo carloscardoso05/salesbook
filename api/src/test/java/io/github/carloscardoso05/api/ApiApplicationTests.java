@@ -10,4 +10,8 @@ class ApiApplicationTests {
     void contextLoads() {
     }
 
+    @Test
+    void testFails() {
+        throws new RuntimeException("This test is designed to fail");
+    }
 }
