@@ -10,12 +10,13 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springdoc.core.annotations.ParameterObject;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/payments")
@@ -25,15 +26,16 @@ public class PaymentController {
     private final PaymentService paymentService;
 
     @GetMapping
-    @Operation(summary = "List payments by customer", description = "Returns all payments for a given customer")
+    @Operation(summary = "List payments", description = "Returns a paginated list of all payments, or filtered by a customer")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "List of payments for the customer"),
+            @ApiResponse(responseCode = "200", description = "Paginated list of payments"),
             @ApiResponse(responseCode = "404", description = "Customer not found")
     })
-    public List<PaymentDto> listPaymentsByCustomer(
-            @Parameter(description = "Customer ID", example = "1")
-            @RequestParam("customerId") Integer customerId) {
-        return paymentService.listPaymentsByCustomer(customerId);
+    public Page<PaymentDto> listPayments(
+            @Parameter(description = "Customer ID to filter by", example = "1")
+            @RequestParam(value = "customerId", required = false) Integer customerId,
+            @ParameterObject Pageable pageable) {
+        return paymentService.listPayments(pageable, customerId);
     }
 
     @GetMapping(path = "/{id}", produces = MediaType.APPLICATION_JSON_VALUE)

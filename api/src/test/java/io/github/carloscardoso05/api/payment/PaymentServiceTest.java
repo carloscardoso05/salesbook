@@ -12,6 +12,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
@@ -51,14 +54,28 @@ class PaymentServiceTest {
     }
 
     @Test
-    void listPaymentsByCustomer() {
+    void listPayments() {
+        var pageable = PageRequest.of(0, 10);
+        var page = new PageImpl<>(List.of(payment), pageable, 1);
+        when(paymentRepository.findAll(pageable)).thenReturn(page);
+
+        Page<PaymentDto> result = paymentService.listPayments(pageable, null);
+
+        assertThat(result.getContent()).hasSize(1);
+        assertThat(result.getContent().getFirst().value()).isEqualTo(new BigDecimal("50.00"));
+    }
+
+    @Test
+    void listPayments_byCustomer() {
+        var pageable = PageRequest.of(0, 10);
+        var page = new PageImpl<>(List.of(payment), pageable, 1);
         when(customerRepository.existsById(1)).thenReturn(true);
-        when(paymentRepository.findAllByCustomerId(1)).thenReturn(List.of(payment));
+        when(paymentRepository.findAllByCustomerId(1, pageable)).thenReturn(page);
 
-        List<PaymentDto> result = paymentService.listPaymentsByCustomer(1);
+        Page<PaymentDto> result = paymentService.listPayments(pageable, 1);
 
-        assertThat(result).hasSize(1);
-        var dto = result.getFirst();
+        assertThat(result.getContent()).hasSize(1);
+        var dto = result.getContent().getFirst();
         assertThat(dto.id()).isEqualTo(10);
         assertThat(dto.value()).isEqualTo(new BigDecimal("50.00"));
         assertThat(dto.customerId()).isEqualTo(1);
@@ -67,10 +84,10 @@ class PaymentServiceTest {
     }
 
     @Test
-    void listPaymentsByCustomer_customerNotFound() {
+    void listPayments_customerNotFound() {
         when(customerRepository.existsById(99)).thenReturn(false);
 
-        assertThatThrownBy(() -> paymentService.listPaymentsByCustomer(99))
+        assertThatThrownBy(() -> paymentService.listPayments(PageRequest.of(0, 10), 99))
                 .isInstanceOf(NotFoundException.class)
                 .hasMessage("Customer for id 99 not found");
     }

@@ -7,10 +7,10 @@ import io.github.carloscardoso05.api.shared.NotFoundException;
 import io.github.carloscardoso05.api.payment.dto.PaymentDto;
 import io.github.carloscardoso05.api.payment.dto.UpdatePaymentRequest;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -19,13 +19,14 @@ public class PaymentService {
     private final CustomerRepository customerRepository;
 
     @Transactional(readOnly = true)
-    public List<PaymentDto> listPaymentsByCustomer(Integer customerId) {
-        if (!customerRepository.existsById(customerId)) {
+    public Page<PaymentDto> listPayments(Pageable pageable, Integer customerId) {
+        if (customerId != null && !customerRepository.existsById(customerId)) {
             throw new NotFoundException(Customer.class, customerId);
         }
-        return paymentRepository.findAllByCustomerId(customerId).stream()
-                .map(PaymentDto::of)
-                .toList();
+        var payments = customerId != null
+                ? paymentRepository.findAllByCustomerId(customerId, pageable)
+                : paymentRepository.findAll(pageable);
+        return payments.map(PaymentDto::of);
     }
 
     @Transactional(readOnly = true)
