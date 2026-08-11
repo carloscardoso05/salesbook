@@ -3,6 +3,8 @@ package io.github.carloscardoso05.api.customer;
 import io.github.carloscardoso05.api.customer.dto.CreateCustomerRequest;
 import io.github.carloscardoso05.api.customer.dto.CustomerDto;
 import io.github.carloscardoso05.api.customer.dto.UpdateCustomerRequest;
+import io.github.carloscardoso05.api.shared.DuplicateException;
+import io.github.carloscardoso05.api.shared.NotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -28,7 +30,7 @@ public class CustomerService {
     @Transactional
     public CustomerDto createCustomer(CreateCustomerRequest request) {
         if (customerRepository.existsByNameIgnoreCase(request.name())) {
-            throw new IllegalArgumentException("Customer with name '%s' already exists.".formatted(request.name()));
+            throw new DuplicateException("Customer with name '%s' already exists.".formatted(request.name()));
         }
         var customer = new Customer(request.name(), request.balance());
         return CustomerDto.of(customerRepository.save(customer));
@@ -37,7 +39,7 @@ public class CustomerService {
     @Transactional
     public CustomerDto updateCustomer(Integer id, UpdateCustomerRequest request) {
         if (customerRepository.existsByNameIgnoreCaseAndIdNot(request.name(), id)) {
-            throw new IllegalArgumentException("Customer with name '%s' already exists.".formatted(request.name()));
+            throw new DuplicateException("Customer with name '%s' already exists.".formatted(request.name()));
         }
         var customer = getCustomerById(id);
         if (StringUtils.hasText(request.name())) {
@@ -51,10 +53,13 @@ public class CustomerService {
 
     @Transactional
     public void deleteCustomer(Integer id) {
+        if (!customerRepository.existsById(id)) {
+            throw new NotFoundException(Customer.class, id);
+        }
         customerRepository.deleteById(id);
     }
 
     private Customer getCustomerById(Integer id) {
-        return customerRepository.findById(id).orElseThrow();
+        return customerRepository.findById(id).orElseThrow(() -> new NotFoundException(Customer.class, id));
     }
 }

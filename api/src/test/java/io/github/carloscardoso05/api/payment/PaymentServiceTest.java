@@ -5,6 +5,7 @@ import io.github.carloscardoso05.api.customer.CustomerRepository;
 import io.github.carloscardoso05.api.payment.dto.CreatePaymentRequest;
 import io.github.carloscardoso05.api.payment.dto.PaymentDto;
 import io.github.carloscardoso05.api.payment.dto.UpdatePaymentRequest;
+import io.github.carloscardoso05.api.shared.NotFoundException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -16,7 +17,6 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
-import java.util.NoSuchElementException;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -83,7 +83,8 @@ class PaymentServiceTest {
         when(paymentRepository.findById(99)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> paymentService.findPaymentById(99))
-                .isInstanceOf(NoSuchElementException.class);
+                .isInstanceOf(NotFoundException.class)
+                .hasMessage("Payment for id 99 not found");
     }
 
     @Test
@@ -106,7 +107,8 @@ class PaymentServiceTest {
         var request = new CreatePaymentRequest(99, new BigDecimal("50.00"), null);
 
         assertThatThrownBy(() -> paymentService.createPayment(request))
-                .isInstanceOf(NoSuchElementException.class);
+                .isInstanceOf(NotFoundException.class)
+                .hasMessage("Customer for id 99 not found");
     }
 
     @Test
@@ -141,7 +143,8 @@ class PaymentServiceTest {
         var request = new UpdatePaymentRequest(null, null);
 
         assertThatThrownBy(() -> paymentService.updatePayment(99, request))
-                .isInstanceOf(NoSuchElementException.class);
+                .isInstanceOf(NotFoundException.class)
+                .hasMessage("Payment for id 99 not found");
     }
 
     @Test
@@ -159,6 +162,7 @@ class PaymentServiceTest {
         when(paymentRepository.findById(99)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> paymentService.deletePayment(99))
-                .isInstanceOf(NoSuchElementException.class);
+                .isInstanceOf(NotFoundException.class)
+                .hasMessage("Payment for id 99 not found");
     }
 }

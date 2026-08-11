@@ -3,6 +3,8 @@ package io.github.carloscardoso05.api.customer;
 import io.github.carloscardoso05.api.customer.dto.CreateCustomerRequest;
 import io.github.carloscardoso05.api.customer.dto.CustomerDto;
 import io.github.carloscardoso05.api.customer.dto.UpdateCustomerRequest;
+import io.github.carloscardoso05.api.shared.DuplicateException;
+import io.github.carloscardoso05.api.shared.NotFoundException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -15,11 +17,9 @@ import org.springframework.data.domain.PageRequest;
 
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.NoSuchElementException;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
@@ -68,7 +68,8 @@ class CustomerServiceTest {
         when(customerRepository.findById(99)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> customerService.findCustomerById(99))
-                .isInstanceOf(NoSuchElementException.class);
+                .isInstanceOf(NotFoundException.class)
+                .hasMessage("Customer for id 99 not found");
     }
 
     @Test
@@ -88,9 +89,9 @@ class CustomerServiceTest {
         var request = new CreateCustomerRequest("Carlos", new BigDecimal("50.00"));
         when(customerRepository.existsByNameIgnoreCase("Carlos")).thenReturn(true);
 
-        assertThatIllegalArgumentException()
-                .isThrownBy(() -> customerService.createCustomer(request))
-                .withMessage("Customer with name 'Carlos' already exists.");
+        assertThatThrownBy(() -> customerService.createCustomer(request))
+                .isInstanceOf(DuplicateException.class)
+                .hasMessage("Customer with name 'Carlos' already exists.");
     }
 
     @Test
@@ -114,7 +115,8 @@ class CustomerServiceTest {
         var request = new UpdateCustomerRequest("Anyone", null);
 
         assertThatThrownBy(() -> customerService.updateCustomer(99, request))
-                .isInstanceOf(NoSuchElementException.class);
+                .isInstanceOf(NotFoundException.class)
+                .hasMessage("Customer for id 99 not found");
     }
 
     @Test
@@ -122,15 +124,26 @@ class CustomerServiceTest {
         var request = new UpdateCustomerRequest("Maria", null);
         when(customerRepository.existsByNameIgnoreCaseAndIdNot("Maria", 1)).thenReturn(true);
 
-        assertThatIllegalArgumentException()
-                .isThrownBy(() -> customerService.updateCustomer(1, request))
-                .withMessage("Customer with name 'Maria' already exists.");
+        assertThatThrownBy(() -> customerService.updateCustomer(1, request))
+                .isInstanceOf(DuplicateException.class)
+                .hasMessage("Customer with name 'Maria' already exists.");
     }
 
     @Test
     void deleteCustomer() {
+        when(customerRepository.existsById(1)).thenReturn(true);
+
         customerService.deleteCustomer(1);
 
         verify(customerRepository).deleteById(1);
+    }
+
+    @Test
+    void deleteCustomer_notFound() {
+        when(customerRepository.existsById(99)).thenReturn(false);
+
+        assertThatThrownBy(() -> customerService.deleteCustomer(99))
+                .isInstanceOf(NotFoundException.class)
+                .hasMessage("Customer for id 99 not found");
     }
 }

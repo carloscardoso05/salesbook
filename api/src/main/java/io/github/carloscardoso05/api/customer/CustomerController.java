@@ -46,7 +46,7 @@ public class CustomerController {
     @Operation(summary = "Create customer", description = "Creates a new customer")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Customer created"),
-            @ApiResponse(responseCode = "400", description = "Customer name already exists")
+            @ApiResponse(responseCode = "409", description = "Customer name already exists")
     })
     public CustomerDto createCustomer(@RequestBody @Valid CreateCustomerRequest request) {
         return customerService.createCustomer(request);
@@ -57,7 +57,7 @@ public class CustomerController {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Customer updated"),
             @ApiResponse(responseCode = "404", description = "Customer not found"),
-            @ApiResponse(responseCode = "400", description = "Customer name already exists")
+            @ApiResponse(responseCode = "409", description = "Customer name already exists")
     })
     public CustomerDto updateCustomer(
             @Parameter(description = "Customer ID", example = "1") @PathVariable Integer id,

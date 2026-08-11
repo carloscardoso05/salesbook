@@ -1,7 +1,9 @@
 package io.github.carloscardoso05.api.payment;
 
+import io.github.carloscardoso05.api.customer.Customer;
 import io.github.carloscardoso05.api.customer.CustomerRepository;
 import io.github.carloscardoso05.api.payment.dto.CreatePaymentRequest;
+import io.github.carloscardoso05.api.shared.NotFoundException;
 import io.github.carloscardoso05.api.payment.dto.PaymentDto;
 import io.github.carloscardoso05.api.payment.dto.UpdatePaymentRequest;
 import lombok.RequiredArgsConstructor;
@@ -30,7 +32,8 @@ public class PaymentService {
 
     @Transactional
     public PaymentDto createPayment(CreatePaymentRequest request) {
-        var customer = customerRepository.findById(request.customerId()).orElseThrow();
+        var customer = customerRepository.findById(request.customerId())
+                .orElseThrow(() -> new NotFoundException(Customer.class, request.customerId()));
         var payment = new Payment(request.value(), customer, request.paidAt());
         customer.setBalance(customer.getBalance().add(request.value()));
         return PaymentDto.of(paymentRepository.save(payment));
@@ -60,6 +63,6 @@ public class PaymentService {
     }
 
     private Payment getPaymentById(Integer id) {
-        return paymentRepository.findById(id).orElseThrow();
+        return paymentRepository.findById(id).orElseThrow(() -> new NotFoundException(Payment.class, id));
     }
 }
