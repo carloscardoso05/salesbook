@@ -1,5 +1,6 @@
 package io.github.carloscardoso05.api;
 
+import io.github.carloscardoso05.api.product.Product;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
