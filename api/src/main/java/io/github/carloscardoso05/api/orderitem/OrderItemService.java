@@ -29,6 +29,11 @@ public class OrderItemService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public OrderItemDto findItem(Integer orderId, Integer itemId) {
+        return OrderItemDto.of(getOrderItemInOrder(orderId, itemId));
+    }
+
     @Transactional
     public OrderItemDto createItem(Integer orderId, CreateOrderItemRequest request) {
         var order = getOrderById(orderId);
@@ -71,11 +76,7 @@ public class OrderItemService {
     }
 
     private OrderItem getOrderItemInOrder(Integer orderId, Integer itemId) {
-        var orderItem = orderItemRepository.findById(itemId)
+        return orderItemRepository.findByIdAndOrderId(itemId, orderId)
                 .orElseThrow(() -> new NotFoundException(OrderItem.class, itemId));
-        if (!orderItem.getOrder().getId().equals(orderId)) {
-            throw new NotFoundException(OrderItem.class, itemId);
-        }
-        return orderItem;
     }
 }

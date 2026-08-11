@@ -86,6 +86,37 @@ class OrderItemServiceTest {
     }
 
     @Test
+    void findItem() {
+        when(orderItemRepository.findByIdAndOrderId(20, 10)).thenReturn(Optional.of(orderItem));
+
+        OrderItemDto result = orderItemService.findItem(10, 20);
+
+        assertThat(result.id()).isEqualTo(20);
+        assertThat(result.orderId()).isEqualTo(10);
+        assertThat(result.productId()).isEqualTo(5);
+        assertThat(result.productName()).isEqualTo("Coffee");
+        assertThat(result.price()).isEqualTo(new BigDecimal("25.00"));
+    }
+
+    @Test
+    void findItem_itemNotFound() {
+        when(orderItemRepository.findByIdAndOrderId(99, 10)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> orderItemService.findItem(10, 99))
+                .isInstanceOf(NotFoundException.class)
+                .hasMessage("OrderItem for id 99 not found");
+    }
+
+    @Test
+    void findItem_itemNotInOrder() {
+        when(orderItemRepository.findByIdAndOrderId(20, 99)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> orderItemService.findItem(99, 20))
+                .isInstanceOf(NotFoundException.class)
+                .hasMessage("OrderItem for id 20 not found");
+    }
+
+    @Test
     void createItem_deductsBalanceAndStock() {
         when(orderRepository.findById(10)).thenReturn(Optional.of(order));
         when(productRepository.findById(5)).thenReturn(Optional.of(product));
@@ -133,7 +164,7 @@ class OrderItemServiceTest {
 
     @Test
     void updateItem_priceIncreased() {
-        when(orderItemRepository.findById(20)).thenReturn(Optional.of(orderItem));
+        when(orderItemRepository.findByIdAndOrderId(20, 10)).thenReturn(Optional.of(orderItem));
 
         OrderItemDto result = orderItemService.updateItem(10, 20, new UpdateOrderItemRequest(new BigDecimal("40.00")));
 
@@ -144,7 +175,7 @@ class OrderItemServiceTest {
 
     @Test
     void updateItem_priceDecreased() {
-        when(orderItemRepository.findById(20)).thenReturn(Optional.of(orderItem));
+        when(orderItemRepository.findByIdAndOrderId(20, 10)).thenReturn(Optional.of(orderItem));
 
         OrderItemDto result = orderItemService.updateItem(10, 20, new UpdateOrderItemRequest(new BigDecimal("10.00")));
 
@@ -155,7 +186,7 @@ class OrderItemServiceTest {
 
     @Test
     void updateItem_noPriceKeepsBalance() {
-        when(orderItemRepository.findById(20)).thenReturn(Optional.of(orderItem));
+        when(orderItemRepository.findByIdAndOrderId(20, 10)).thenReturn(Optional.of(orderItem));
 
         OrderItemDto result = orderItemService.updateItem(10, 20, new UpdateOrderItemRequest(null));
 
@@ -166,7 +197,7 @@ class OrderItemServiceTest {
 
     @Test
     void updateItem_itemNotFound() {
-        when(orderItemRepository.findById(99)).thenReturn(Optional.empty());
+        when(orderItemRepository.findByIdAndOrderId(99, 10)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> orderItemService.updateItem(10, 99, new UpdateOrderItemRequest(new BigDecimal("40.00"))))
                 .isInstanceOf(NotFoundException.class)
@@ -175,7 +206,7 @@ class OrderItemServiceTest {
 
     @Test
     void updateItem_itemNotInOrder() {
-        when(orderItemRepository.findById(20)).thenReturn(Optional.of(orderItem));
+        when(orderItemRepository.findByIdAndOrderId(20, 99)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> orderItemService.updateItem(99, 20, new UpdateOrderItemRequest(new BigDecimal("40.00"))))
                 .isInstanceOf(NotFoundException.class)
@@ -184,7 +215,7 @@ class OrderItemServiceTest {
 
     @Test
     void deleteItem_refundsBalanceAndStock() {
-        when(orderItemRepository.findById(20)).thenReturn(Optional.of(orderItem));
+        when(orderItemRepository.findByIdAndOrderId(20, 10)).thenReturn(Optional.of(orderItem));
 
         orderItemService.deleteItem(10, 20);
 
@@ -195,7 +226,7 @@ class OrderItemServiceTest {
 
     @Test
     void deleteItem_itemNotFound() {
-        when(orderItemRepository.findById(99)).thenReturn(Optional.empty());
+        when(orderItemRepository.findByIdAndOrderId(99, 10)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> orderItemService.deleteItem(10, 99))
                 .isInstanceOf(NotFoundException.class)

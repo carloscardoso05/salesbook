@@ -42,6 +42,18 @@ public class OrderItemController {
         return orderItemService.listItems(orderId);
     }
 
+    @GetMapping(path = "/{itemId}", produces = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "Find order item by ID", description = "Returns a single order item by its ID")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Order item found"),
+            @ApiResponse(responseCode = "404", description = "Order item not found")
+    })
+    public OrderItemDto findItem(
+            @Parameter(description = "Order ID", example = "1") @PathVariable Integer orderId,
+            @Parameter(description = "Order item ID", example = "1") @PathVariable Integer itemId) {
+        return orderItemService.findItem(orderId, itemId);
+    }
+
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     @Operation(summary = "Create order item", description = "Adds an item to an order, deducting its price from the customer balance and decrementing the product stock")
     @ApiResponses({
