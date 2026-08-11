@@ -131,16 +131,16 @@ class CustomerServiceTest {
 
     @Test
     void deleteCustomer() {
-        when(customerRepository.existsById(1)).thenReturn(true);
+        when(customerRepository.findById(1)).thenReturn(Optional.of(customer));
 
         customerService.deleteCustomer(1);
 
-        verify(customerRepository).deleteById(1);
+        verify(customerRepository).delete(customer);
     }
 
     @Test
     void deleteCustomer_notFound() {
-        when(customerRepository.existsById(99)).thenReturn(false);
+        when(customerRepository.findById(99)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> customerService.deleteCustomer(99))
                 .isInstanceOf(NotFoundException.class)

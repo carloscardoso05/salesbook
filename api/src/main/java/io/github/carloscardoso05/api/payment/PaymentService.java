@@ -20,6 +20,9 @@ public class PaymentService {
 
     @Transactional(readOnly = true)
     public List<PaymentDto> listPaymentsByCustomer(Integer customerId) {
+        if (!customerRepository.existsById(customerId)) {
+            throw new NotFoundException(Customer.class, customerId);
+        }
         return paymentRepository.findAllByCustomerId(customerId).stream()
                 .map(PaymentDto::of)
                 .toList();

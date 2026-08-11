@@ -11,7 +11,9 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.util.List;
 
@@ -22,13 +24,15 @@ import java.util.List;
 public class PaymentController {
     private final PaymentService paymentService;
 
-    @GetMapping("/customer/{customerId}")
+    @GetMapping
     @Operation(summary = "List payments by customer", description = "Returns all payments for a given customer")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "List of payments for the customer")
+            @ApiResponse(responseCode = "200", description = "List of payments for the customer"),
+            @ApiResponse(responseCode = "404", description = "Customer not found")
     })
     public List<PaymentDto> listPaymentsByCustomer(
-            @Parameter(description = "Customer ID", example = "1") @PathVariable Integer customerId) {
+            @Parameter(description = "Customer ID", example = "1")
+            @RequestParam("customerId") Integer customerId) {
         return paymentService.listPaymentsByCustomer(customerId);
     }
 
@@ -46,18 +50,26 @@ public class PaymentController {
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     @Operation(summary = "Create payment", description = "Creates a new payment for a customer")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Payment created"),
+            @ApiResponse(responseCode = "201", description = "Payment created"),
+            @ApiResponse(responseCode = "400", description = "Validation error"),
             @ApiResponse(responseCode = "404", description = "Customer not found")
     })
-    public PaymentDto createPayment(@RequestBody @Valid CreatePaymentRequest request) {
-        return paymentService.createPayment(request);
+    public ResponseEntity<PaymentDto> createPayment(@RequestBody @Valid CreatePaymentRequest request) {
+        var dto = paymentService.createPayment(request);
+        var location = ServletUriComponentsBuilder.fromCurrentRequest()
+                .path("/{id}")
+                .buildAndExpand(dto.id())
+                .toUri();
+        return ResponseEntity.created(location).body(dto);
     }
 
     @PutMapping(path = "/{id}", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     @Operation(summary = "Update payment", description = "Updates an existing payment. Only non-null fields are applied.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Payment updated"),
-            @ApiResponse(responseCode = "404", description = "Payment not found")
+            @ApiResponse(responseCode = "400", description = "Validation error"),
+            @ApiResponse(responseCode = "404", description = "Payment not found"),
+            @ApiResponse(responseCode = "409", description = "Concurrent modification")
     })
     public PaymentDto updatePayment(
             @Parameter(description = "Payment ID", example = "1") @PathVariable Integer id,
@@ -69,7 +81,8 @@ public class PaymentController {
     @Operation(summary = "Delete payment", description = "Deletes a payment by its ID")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Payment deleted"),
-            @ApiResponse(responseCode = "404", description = "Payment not found")
+            @ApiResponse(responseCode = "404", description = "Payment not found"),
+            @ApiResponse(responseCode = "409", description = "Concurrent modification")
     })
     public void deletePayment(
             @Parameter(description = "Payment ID", example = "1") @PathVariable Integer id) {

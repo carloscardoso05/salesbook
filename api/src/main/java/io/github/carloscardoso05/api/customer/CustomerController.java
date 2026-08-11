@@ -14,7 +14,9 @@ import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 @RestController
 @RequestMapping("/customers")
@@ -45,19 +47,26 @@ public class CustomerController {
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     @Operation(summary = "Create customer", description = "Creates a new customer")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Customer created"),
+            @ApiResponse(responseCode = "201", description = "Customer created"),
+            @ApiResponse(responseCode = "400", description = "Validation error"),
             @ApiResponse(responseCode = "409", description = "Customer name already exists")
     })
-    public CustomerDto createCustomer(@RequestBody @Valid CreateCustomerRequest request) {
-        return customerService.createCustomer(request);
+    public ResponseEntity<CustomerDto> createCustomer(@RequestBody @Valid CreateCustomerRequest request) {
+        var dto = customerService.createCustomer(request);
+        var location = ServletUriComponentsBuilder.fromCurrentRequest()
+                .path("/{id}")
+                .buildAndExpand(dto.id())
+                .toUri();
+        return ResponseEntity.created(location).body(dto);
     }
 
     @PutMapping(path = "/{id}", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     @Operation(summary = "Update customer", description = "Updates an existing customer. Only non-null fields are applied.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Customer updated"),
+            @ApiResponse(responseCode = "400", description = "Validation error"),
             @ApiResponse(responseCode = "404", description = "Customer not found"),
-            @ApiResponse(responseCode = "409", description = "Customer name already exists")
+            @ApiResponse(responseCode = "409", description = "Customer name already exists or concurrent modification")
     })
     public CustomerDto updateCustomer(
             @Parameter(description = "Customer ID", example = "1") @PathVariable Integer id,
@@ -69,7 +78,8 @@ public class CustomerController {
     @Operation(summary = "Delete customer", description = "Deletes a customer by its ID")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Customer deleted"),
-            @ApiResponse(responseCode = "404", description = "Customer not found")
+            @ApiResponse(responseCode = "404", description = "Customer not found"),
+            @ApiResponse(responseCode = "409", description = "Customer has related orders or payments")
     })
     public void deleteCustomer(
             @Parameter(description = "Customer ID", example = "1") @PathVariable Integer id) {

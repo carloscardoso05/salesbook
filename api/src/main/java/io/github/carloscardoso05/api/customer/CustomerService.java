@@ -53,10 +53,7 @@ public class CustomerService {
 
     @Transactional
     public void deleteCustomer(Integer id) {
-        if (!customerRepository.existsById(id)) {
-            throw new NotFoundException(Customer.class, id);
-        }
-        customerRepository.deleteById(id);
+        customerRepository.delete(getCustomerById(id));
     }
 
     private Customer getCustomerById(Integer id) {

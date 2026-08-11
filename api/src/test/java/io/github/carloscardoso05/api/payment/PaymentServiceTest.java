@@ -52,6 +52,7 @@ class PaymentServiceTest {
 
     @Test
     void listPaymentsByCustomer() {
+        when(customerRepository.existsById(1)).thenReturn(true);
         when(paymentRepository.findAllByCustomerId(1)).thenReturn(List.of(payment));
 
         List<PaymentDto> result = paymentService.listPaymentsByCustomer(1);
@@ -63,6 +64,15 @@ class PaymentServiceTest {
         assertThat(dto.customerId()).isEqualTo(1);
         assertThat(dto.customerName()).isEqualTo("Carlos");
         assertThat(dto.paidAt()).isEqualTo(paidAt);
+    }
+
+    @Test
+    void listPaymentsByCustomer_customerNotFound() {
+        when(customerRepository.existsById(99)).thenReturn(false);
+
+        assertThatThrownBy(() -> paymentService.listPaymentsByCustomer(99))
+                .isInstanceOf(NotFoundException.class)
+                .hasMessage("Customer for id 99 not found");
     }
 
     @Test

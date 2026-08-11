@@ -29,6 +29,8 @@ cd api
 - **Spring Boot 4.1.0, Java 21, Gradle** (wrapper included).
 - **Lombok**: entities use `@Getter`/`@Setter`, controllers and services use `@RequiredArgsConstructor` for constructor injection. DTOs are Java `record` types.
 - **Transactions**: every service method is `@Transactional` — reads use `@Transactional(readOnly = true)`, writes use `@Transactional`.
+- **Exception handling** is centralized in the `shared/` sub-package: `ApiExceptionHandler` (`@RestControllerAdvice`) plus `ApiError` (error response body), `NotFoundException`, and `DuplicateException`. Services throw the custom exceptions (or `IllegalArgumentException`); the handler maps them to `404`/`409`/`400` and also covers Spring-level errors (`400` for validation, `409` for optimistic-lock and data-integrity violations, `500` fallback). Keep the handler updated when adding new exceptions.
+- **Create endpoints return `201 CREATED` with a `Location` header** (built with `ServletUriComponentsBuilder` from the current request).
 - **`.env`** is loaded by `spring-dotenv` (`me.paulschwarz:spring-dotenv-bom:5.1.0`) and supplies the `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` variables used in `application.properties`.
 
 ## Package structure
@@ -56,6 +58,5 @@ Product  1──* OrderItem   (RESTRICT on delete)
 
 ## Known technical debt (planned improvements)
 
-- **`customer.balance` lost-update** — was fixed with optimistic locking: `Customer` now has `@Version Instant version` (column added in `V2__add_version_to_customers.sql`), so `PaymentService.createPayment`/`updatePayment`/`deletePayment` and `CustomerService.updateCustomer` fail with `ObjectOptimisticLockingFailureException` on concurrent modification instead of silently overwriting. TODO: map that exception to `409 CONFLICT` (client retries) — nothing is implemented for it yet. Related drift: `CustomerService.updateCustomer` lets clients set `balance` directly, so it can diverge from the real sum of payments.
-- **Controllers document 404 but return 500** — `orElseThrow()` → `NoSuchElementException` → 500. TODO: global exception handler (`@RestControllerAdvice`) mapping to `404 NOT_FOUND`.
+- **`customer.balance` drift** — `CustomerService.updateCustomer` lets clients set `balance` directly, so it can diverge from the real sum of payments. The concurrent-modification side of this was addressed with optimistic locking (`@Version Instant version` on `Customer`, column added in `V2__add_version_to_customers.sql`); `ApiExceptionHandler` maps `OptimisticLockingFailureException` to `409 CONFLICT`.
 - **`spring-dotenv` does not load `.env` in test workers** — `./gradlew test` fails with `'url' must start with "jdbc"` unless `DB_URL`/`DB_USERNAME`/`DB_PASSWORD` are exported in the shell before running.
