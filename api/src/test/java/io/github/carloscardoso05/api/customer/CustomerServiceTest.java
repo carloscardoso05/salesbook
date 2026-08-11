@@ -1,5 +1,7 @@
 package io.github.carloscardoso05.api.customer;
 
+import io.github.carloscardoso05.api.adjustment.BalanceAdjustment;
+import io.github.carloscardoso05.api.adjustment.BalanceAdjustmentRepository;
 import io.github.carloscardoso05.api.customer.dto.CreateCustomerRequest;
 import io.github.carloscardoso05.api.customer.dto.CustomerDto;
 import io.github.carloscardoso05.api.customer.dto.UpdateCustomerRequest;
@@ -8,6 +10,7 @@ import io.github.carloscardoso05.api.shared.NotFoundException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -22,6 +25,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -30,6 +34,9 @@ class CustomerServiceTest {
 
     @Mock
     private CustomerRepository customerRepository;
+
+    @Mock
+    private BalanceAdjustmentRepository balanceAdjustmentRepository;
 
     @InjectMocks
     private CustomerService customerService;
@@ -99,12 +106,44 @@ class CustomerServiceTest {
         when(customerRepository.existsByNameIgnoreCaseAndIdNot(null, 1)).thenReturn(false);
         when(customerRepository.findById(1)).thenReturn(Optional.of(customer));
         when(customerRepository.save(any(Customer.class))).thenReturn(customer);
+        when(balanceAdjustmentRepository.save(any(BalanceAdjustment.class))).thenAnswer(inv -> inv.getArgument(0, BalanceAdjustment.class));
 
         var request = new UpdateCustomerRequest(null, new BigDecimal("200.00"));
         CustomerDto result = customerService.updateCustomer(1, request);
 
         assertThat(result.balance()).isEqualTo(new BigDecimal("200.00"));
         assertThat(customer.getBalance()).isEqualTo(new BigDecimal("200.00"));
+
+        var captor = ArgumentCaptor.forClass(BalanceAdjustment.class);
+        verify(balanceAdjustmentRepository).save(captor.capture());
+        var adjustment = captor.getValue();
+        assertThat(adjustment.getCustomer()).isSameAs(customer);
+        assertThat(adjustment.getValue()).isEqualTo(new BigDecimal("100.00"));
+        assertThat(adjustment.getAdjustedAt()).isNotNull();
+    }
+
+    @Test
+    void updateCustomer_sameBalance_doesNotCreateAdjustment() {
+        when(customerRepository.existsByNameIgnoreCaseAndIdNot(null, 1)).thenReturn(false);
+        when(customerRepository.findById(1)).thenReturn(Optional.of(customer));
+        when(customerRepository.save(any(Customer.class))).thenReturn(customer);
+
+        var request = new UpdateCustomerRequest(null, new BigDecimal("100.00"));
+        customerService.updateCustomer(1, request);
+
+        verify(balanceAdjustmentRepository, never()).save(any());
+    }
+
+    @Test
+    void updateCustomer_withoutBalance_doesNotCreateAdjustment() {
+        when(customerRepository.existsByNameIgnoreCaseAndIdNot("Carlos Updated", 1)).thenReturn(false);
+        when(customerRepository.findById(1)).thenReturn(Optional.of(customer));
+        when(customerRepository.save(any(Customer.class))).thenReturn(customer);
+
+        var request = new UpdateCustomerRequest("Carlos Updated", null);
+        customerService.updateCustomer(1, request);
+
+        verify(balanceAdjustmentRepository, never()).save(any());
     }
 
     @Test

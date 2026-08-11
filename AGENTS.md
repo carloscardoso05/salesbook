@@ -36,6 +36,7 @@ cd api
 
 ## Business rules
 
+- **`BalanceAdjustment`** records manual balance edits: when `updateCustomer` changes `balance`, a `BalanceAdjustment` is created with `value = newBalance - oldBalance` (positive increases, negative decreases). Zero-difference updates create no adjustment. The entity is **immutable** (no setters, no update/delete service methods or endpoints — read-only API at `/adjustments`).
 - **`Payment`** increases `customer.balance` by `value` on create; update adjusts by the value difference; delete subtracts `value`.
 - **`OrderItem`** affects `customer.balance` (opposite of Payment — it is an expense):
   - create: `balance -= price` and `product.stock -= 1` (creation fails with `400` if `stock < 1` before deducting);
@@ -51,6 +52,7 @@ All features follow the **vertical slice** pattern — a dedicated sub-package w
 
 - **`customer/`** — reference vertical slice. Use it as the pattern for new features.
 - **`payment/`** — full vertical slice.
+- **`adjustment/`** — full vertical slice, read-only (`BalanceAdjustment`).
 - **`product/`** — full vertical slice.
 - **`order/`** — full vertical slice (nested resource: `OrderItemController` lives under `orderitem/`).
 - **`orderitem/`** — full vertical slice, exposed at `/orders/{orderId}/items`.
@@ -60,6 +62,7 @@ All features follow the **vertical slice** pattern — a dedicated sub-package w
 ```
 Customer 1──* Order       (RESTRICT on delete)
 Customer 1──* Payment     (RESTRICT on delete)
+Customer 1──* BalanceAdjustment (RESTRICT on delete)
 Order    1──* OrderItem   (CASCADE on delete)
 Product  1──* OrderItem   (RESTRICT on delete)
 ```
@@ -69,10 +72,11 @@ Product  1──* OrderItem   (RESTRICT on delete)
 
 ## Tests
 
-- Unit tests with **Mockito + AssertJ**, mirroring the existing suites: `*ServiceTest` (service layer, mocked repositories, strict stubs, ids via `ReflectionTestUtils`) and `*Test` (entity guards). Suites exist for Customer, Payment, Product, Order, and OrderItem.
+- Unit tests with **Mockito + AssertJ**, mirroring the existing suites: `*ServiceTest` (service layer, mocked repositories, strict stubs, ids via `ReflectionTestUtils`) and `*Test` (entity guards). Suites exist for Customer, Payment, Product, Order, OrderItem, and Adjustment.
 - Test starters (`data-jpa-test`, `webmvc-test`, `validation-test`, `flyway-test`) are on the classpath but not yet used by any test. Planned (not yet implemented): integration tests with `@SpringBootTest` (full balance/stock flow) and `@WebMvcTest` controller slice tests using `@MockitoBean`.
 
 ## Known technical debt (planned improvements)
 
-- **`customer.balance` drift** — `CustomerService.updateCustomer` lets clients set `balance` directly, so it can diverge from the real sum of payments minus order items. The concurrent-modification side was addressed with optimistic locking (`@Version Instant version` on `Customer`, `V2`). **Planned**: replace the client-editable `balance` with a dedicated `Adjustment` entity that records manual balance adjustments (decision pending, not implemented).
+- **`customer.balance` drift** — `CustomerService.updateCustomer` lets clients set `balance` directly, so it can diverge from the real sum of payments minus order items. Manual edits are now auditable via `BalanceAdjustment` (created automatically on balance change, `value = newBalance - oldBalance`). The concurrent-modification side was addressed with optimistic locking (`@Version Instant version` on `Customer`, `V2`). The client-editable `balance` itself is still exposed on `UpdateCustomerRequest`.
 - **`spring-dotenv` does not load `.env` in test workers** — `./gradlew test` fails with `'url' must start with "jdbc"` unless `DB_URL`/`DB_USERNAME`/`DB_PASSWORD` are exported in the shell before running.
+- **N+1 on lazy customer lookups in list endpoints** — `PaymentDto.of` and `BalanceAdjustmentDto.of` read `getCustomer().getId()`/`getName()` on a `LAZY` association while mapping each page row, so `GET /payments` and `GET /adjustments` fire one extra query per row (1 + N). Currently acceptable (small pages/tables) and consistent across slices, but if these reads become hot, fix with `@EntityGraph` or `JOIN FETCH` queries (`findAllByCustomerId`, etc.).

@@ -1,5 +1,7 @@
 package io.github.carloscardoso05.api.customer;
 
+import io.github.carloscardoso05.api.adjustment.BalanceAdjustment;
+import io.github.carloscardoso05.api.adjustment.BalanceAdjustmentRepository;
 import io.github.carloscardoso05.api.customer.dto.CreateCustomerRequest;
 import io.github.carloscardoso05.api.customer.dto.CustomerDto;
 import io.github.carloscardoso05.api.customer.dto.UpdateCustomerRequest;
@@ -12,10 +14,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.math.BigDecimal;
+import java.time.Instant;
+
 @Service
 @RequiredArgsConstructor
 public class CustomerService {
     private final CustomerRepository customerRepository;
+    private final BalanceAdjustmentRepository balanceAdjustmentRepository;
 
     @Transactional(readOnly = true)
     public Page<CustomerDto> listCustomers(Pageable pageable) {
@@ -46,7 +52,11 @@ public class CustomerService {
             customer.setName(request.name());
         }
         if (request.balance() != null) {
-            customer.setBalance(request.balance());
+            var difference = request.balance().subtract(customer.getBalance());
+            if (difference.compareTo(BigDecimal.ZERO) != 0) {
+                customer.setBalance(request.balance());
+                balanceAdjustmentRepository.save(new BalanceAdjustment(customer, difference));
+            }
         }
         return CustomerDto.of(customerRepository.save(customer));
     }
