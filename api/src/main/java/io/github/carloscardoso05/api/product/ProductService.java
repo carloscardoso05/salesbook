@@ -38,7 +38,7 @@ public class ProductService {
 
     @Transactional
     public ProductDto updateProduct(Integer id, UpdateProductRequest request) {
-        if (productRepository.existsByNameIgnoreCaseAndIdNot(request.name(), id)) {
+        if (StringUtils.hasText(request.name()) && productRepository.existsByNameIgnoreCaseAndIdNot(request.name(), id)) {
             throw new DuplicateException("Product with name '%s' already exists.".formatted(request.name()));
         }
         var product = getProductById(id);
@@ -48,7 +48,7 @@ public class ProductService {
         if (request.stock() != null) {
             product.setStock(request.stock());
         }
-        return ProductDto.of(productRepository.save(product));
+        return ProductDto.of(product);
     }
 
     @Transactional

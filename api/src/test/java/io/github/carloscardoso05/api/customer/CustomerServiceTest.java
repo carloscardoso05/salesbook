@@ -103,9 +103,7 @@ class CustomerServiceTest {
 
     @Test
     void updateCustomer() {
-        when(customerRepository.existsByNameIgnoreCaseAndIdNot(null, 1)).thenReturn(false);
         when(customerRepository.findById(1)).thenReturn(Optional.of(customer));
-        when(customerRepository.save(any(Customer.class))).thenReturn(customer);
         when(balanceAdjustmentRepository.save(any(BalanceAdjustment.class))).thenAnswer(inv -> inv.getArgument(0, BalanceAdjustment.class));
 
         var request = new UpdateCustomerRequest(null, new BigDecimal("200.00"));
@@ -124,9 +122,7 @@ class CustomerServiceTest {
 
     @Test
     void updateCustomer_sameBalance_doesNotCreateAdjustment() {
-        when(customerRepository.existsByNameIgnoreCaseAndIdNot(null, 1)).thenReturn(false);
         when(customerRepository.findById(1)).thenReturn(Optional.of(customer));
-        when(customerRepository.save(any(Customer.class))).thenReturn(customer);
 
         var request = new UpdateCustomerRequest(null, new BigDecimal("100.00"));
         customerService.updateCustomer(1, request);
@@ -138,7 +134,6 @@ class CustomerServiceTest {
     void updateCustomer_withoutBalance_doesNotCreateAdjustment() {
         when(customerRepository.existsByNameIgnoreCaseAndIdNot("Carlos Updated", 1)).thenReturn(false);
         when(customerRepository.findById(1)).thenReturn(Optional.of(customer));
-        when(customerRepository.save(any(Customer.class))).thenReturn(customer);
 
         var request = new UpdateCustomerRequest("Carlos Updated", null);
         customerService.updateCustomer(1, request);

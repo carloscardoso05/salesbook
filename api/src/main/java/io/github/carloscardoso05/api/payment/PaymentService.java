@@ -39,7 +39,7 @@ public class PaymentService {
         var customer = customerRepository.findById(request.customerId())
                 .orElseThrow(() -> new NotFoundException(Customer.class, request.customerId()));
         var payment = new Payment(request.value(), customer, request.paidAt());
-        customer.setBalance(customer.getBalance().add(request.value()));
+        customer.addToBalance(request.value());
         return PaymentDto.of(paymentRepository.save(payment));
     }
 
@@ -48,8 +48,7 @@ public class PaymentService {
         var payment = getPaymentById(id);
         if (request.value() != null) {
             var difference = request.value().subtract(payment.getValue());
-            var customer = payment.getCustomer();
-            customer.setBalance(customer.getBalance().add(difference));
+            payment.getCustomer().addToBalance(difference);
             payment.setValue(request.value());
         }
         if (request.paidAt() != null) {
@@ -61,8 +60,7 @@ public class PaymentService {
     @Transactional
     public void deletePayment(Integer id) {
         var payment = getPaymentById(id);
-        var customer = payment.getCustomer();
-        customer.setBalance(customer.getBalance().subtract(payment.getValue()));
+        payment.getCustomer().addToBalance(payment.getValue().negate());
         paymentRepository.delete(payment);
     }
 

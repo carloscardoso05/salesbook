@@ -106,9 +106,7 @@ class ProductServiceTest {
 
     @Test
     void updateProduct() {
-        when(productRepository.existsByNameIgnoreCaseAndIdNot(null, 1)).thenReturn(false);
         when(productRepository.findById(1)).thenReturn(Optional.of(product));
-        when(productRepository.save(any(Product.class))).thenReturn(product);
 
         var request = new UpdateProductRequest(null, 15);
         var result = productService.updateProduct(1, request);

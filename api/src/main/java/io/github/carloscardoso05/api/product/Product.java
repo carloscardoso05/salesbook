@@ -23,7 +23,7 @@ public class Product {
     private Integer id;
 
     @NotNull
-    @Column(name = "name", nullable = false, length = Integer.MAX_VALUE)
+    @Column(name = "name", nullable = false)
     private String name;
 
     @NotNull
@@ -51,5 +51,10 @@ public class Product {
         Assert.notNull(stock, "Stock must not be null");
         Assert.isTrue(stock >= 0, "Stock cannot be negative");
         this.stock = stock;
+    }
+
+    public void addToStock(Integer delta) {
+        Assert.notNull(delta, "Delta cannot be null");
+        this.stock = this.stock + delta;
     }
 }

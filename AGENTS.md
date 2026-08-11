@@ -28,7 +28,7 @@ cd api
 ## Tech stack & conventions
 
 - **Spring Boot 4.0.7, Java 21, Gradle** (wrapper included).
-- **Lombok**: entities use `@Getter` only, with **manual setters guarded by `org.springframework.util.Assert`** (no Lombok `@Setter`). Controllers and services use `@RequiredArgsConstructor` for constructor injection. DTOs are Java `record` types.
+- **Lombok**: entities use `@Getter` only, with **manual setters guarded by `org.springframework.util.Assert`** (no Lombok `@Setter`). Delta mutations use domain mutators on the entity (`Customer.addToBalance(BigDecimal)`, `Product.addToStock(Integer)`) instead of `setX(getX().add()/.subtract())`. Controllers and services use `@RequiredArgsConstructor` for constructor injection. DTOs are Java `record` types.
 - **Transactions**: every service method is `@Transactional` — reads use `@Transactional(readOnly = true)`, writes use `@Transactional`.
 - **Exception handling** is centralized in the `shared/` sub-package: `ApiExceptionHandler` (`@RestControllerAdvice`) plus `ApiError` (error response body), `NotFoundException`, and `DuplicateException`. Services throw the custom exceptions (or `IllegalArgumentException`); the handler maps them to `404`/`409`/`400` and also covers Spring-level errors (`400` for validation, `409` for optimistic-lock and data-integrity violations, `500` fallback). Keep the handler updated when adding new exceptions.
 - **Create endpoints return `201 CREATED` with a `Location` header** (built with `ServletUriComponentsBuilder` from the current request).

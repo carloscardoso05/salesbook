@@ -3,9 +3,6 @@ package io.github.carloscardoso05.api.customer;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
-import lombok.Setter;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
 import org.springframework.util.Assert;
 
 import java.math.BigDecimal;
@@ -21,7 +18,7 @@ public class Customer {
     private Integer id;
 
     @NotNull
-    @Column(name = "name", nullable = false, length = Integer.MAX_VALUE)
+    @Column(name = "name", nullable = false)
     private String name;
 
     @NotNull
@@ -48,5 +45,10 @@ public class Customer {
     public void setBalance(BigDecimal balance) {
         Assert.notNull(balance, "Balance must not be null");
         this.balance = balance;
+    }
+
+    public void addToBalance(BigDecimal delta) {
+        Assert.notNull(delta, "Delta cannot be null");
+        this.balance = this.balance.add(delta);
     }
 }

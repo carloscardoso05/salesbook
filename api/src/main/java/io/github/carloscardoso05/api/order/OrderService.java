@@ -62,9 +62,8 @@ public class OrderService {
         var order = getOrderById(id);
         var customer = order.getCustomer();
         for (var item : orderItemRepository.findAllByOrderId(id)) {
-            customer.setBalance(customer.getBalance().add(item.getPrice()));
-            var product = item.getProduct();
-            product.setStock(product.getStock() + 1);
+            customer.addToBalance(item.getPrice());
+            item.getProduct().addToStock(1);
         }
         orderRepository.delete(order);
     }

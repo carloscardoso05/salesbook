@@ -44,7 +44,7 @@ public class CustomerService {
 
     @Transactional
     public CustomerDto updateCustomer(Integer id, UpdateCustomerRequest request) {
-        if (customerRepository.existsByNameIgnoreCaseAndIdNot(request.name(), id)) {
+        if (StringUtils.hasText(request.name()) && customerRepository.existsByNameIgnoreCaseAndIdNot(request.name(), id)) {
             throw new DuplicateException("Customer with name '%s' already exists.".formatted(request.name()));
         }
         var customer = getCustomerById(id);
@@ -58,7 +58,7 @@ public class CustomerService {
                 balanceAdjustmentRepository.save(new BalanceAdjustment(customer, difference));
             }
         }
-        return CustomerDto.of(customerRepository.save(customer));
+        return CustomerDto.of(customer);
     }
 
     @Transactional
