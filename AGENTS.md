@@ -28,6 +28,7 @@ cd api
 
 - **Spring Boot 4.1.0, Java 21, Gradle** (wrapper included).
 - **Lombok**: entities use `@Getter`/`@Setter`, controllers and services use `@RequiredArgsConstructor` for constructor injection. DTOs are Java `record` types.
+- **Transactions**: every service method is `@Transactional` — reads use `@Transactional(readOnly = true)`, writes use `@Transactional`.
 - **`.env`** is loaded by `spring-dotenv` (`me.paulschwarz:spring-dotenv-bom:5.1.0`) and supplies the `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` variables used in `application.properties`.
 
 ## Package structure

@@ -15,14 +15,17 @@ import org.springframework.util.StringUtils;
 public class CustomerService {
     private final CustomerRepository customerRepository;
 
+    @Transactional(readOnly = true)
     public Page<CustomerDto> listCustomers(Pageable pageable) {
         return customerRepository.findAll(pageable).map(CustomerDto::of);
     }
 
+    @Transactional(readOnly = true)
     public CustomerDto findCustomerById(Integer id) {
         return CustomerDto.of(getCustomerById(id));
     }
 
+    @Transactional
     public CustomerDto createCustomer(CreateCustomerRequest request) {
         if (customerRepository.existsByNameIgnoreCase(request.name())) {
             throw new IllegalArgumentException("Customer with name '%s' already exists.".formatted(request.name()));
@@ -46,6 +49,7 @@ public class CustomerService {
         return CustomerDto.of(customerRepository.save(customer));
     }
 
+    @Transactional
     public void deleteCustomer(Integer id) {
         customerRepository.deleteById(id);
     }
