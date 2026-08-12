@@ -6,7 +6,7 @@ plugins {
 
 group = 'io.github.carloscardoso05'
 version = '0.0.1-SNAPSHOT'
-description = 'api'
+description = 'Salesbook API'
 
 java {
     toolchain {

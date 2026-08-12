@@ -1,4 +1,4 @@
-# Mystore API
+# Salesbook API
 
 REST API de loja com Spring Boot 4.0.7, Java 21, Gradle e PostgreSQL (Flyway para migrações).
 
