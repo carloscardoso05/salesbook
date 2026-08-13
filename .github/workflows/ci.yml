@@ -52,7 +52,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: jar
-          path: build/libs/{{ steps.extract-jar.outputs.jar_name }}
+          path: build/libs/$JAR_NAME
 
   deploy:
     needs: build
@@ -65,7 +65,7 @@ jobs:
           name: jar
 
       - name: Renomeia jar
-        run: mv {{needs.build.outputs.jar_name }} salesbook.jar
+        run: mv ${{ needs.build.outputs.jar_name }} salesbook.jar
 
       - name: Enviar o .jar para o EC2
         uses: appleboy/scp-action@v1
