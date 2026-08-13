@@ -4,12 +4,12 @@ on:
   push:
     branches: [main]
     paths:
-      - 'api/**'
-      - '.github/workflows/ci.yml'
+      - "api/**"
+      - ".github/workflows/ci.yml"
   pull_request:
     paths:
-      - 'api/**'
-      - '.github/workflows/ci.yml'
+      - "api/**"
+      - ".github/workflows/ci.yml"
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -17,30 +17,13 @@ concurrency:
 
 jobs:
   build:
+    outputs:
+      jar: ${{ steps.build.outputs.jar }}
+
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: api
-
-    services:
-      postgres:
-        image: postgres:18-alpine
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: postgres
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
-    env:
-      DB_URL: jdbc:postgresql://localhost:5432/postgres
-      DB_USERNAME: postgres
-      DB_PASSWORD: postgres
 
     steps:
       - name: Checkout
@@ -50,10 +33,33 @@ jobs:
         uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: "21"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
 
       - name: Build and test
-        run: ./gradlew build
+        id: build
+        run: ./gradlew build -x jar
+
+      - name: Updload jar
+        uses: actions/upload-artifact@v7
+        with:
+          name: jar
+          path: api/build/libs/*.jar
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+
+    steps:
+      - name: Download jar
+        uses: actions/download-artifact@v7
+        with:
+          name: jar
+          
+      - name: Print Jar file
+        run: ls -l
