@@ -46,7 +46,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: jar
-          path: api/build/libs/*.jar
+          path: api/build/libs/salesbook.jar
 
   deploy:
     needs: build
@@ -58,5 +58,23 @@ jobs:
         with:
           name: jar
 
-      - name: Print Jar file
-        run: ls -l
+      - name: Enviar o .jar para o EC2
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "salesbook.jar"
+          target: "/home/${{ secrets.EC2_USERNAME }}/app/"
+
+      - name: Reiniciar o serviço systemd via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            # Reinicia o serviço
+            sudo systemctl restart salesbook.service
+            # Verifica o status
+            sudo systemctl status salesbook.service
