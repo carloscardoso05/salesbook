@@ -18,7 +18,7 @@ concurrency:
 jobs:
   build:
     outputs:
-      jar: ${{ steps.build.outputs.jar }}
+      jar_name: ${{ steps.extract-jar.outputs.jar_name }}
 
     runs-on: ubuntu-latest
     defaults:
@@ -42,11 +42,17 @@ jobs:
         id: build
         run: ./gradlew build -x jar
 
-      - name: Updload jar
+      - name: Extract jar
+        id: extract-jar
+        run: |
+          JAR_NAME=$(basename $(find build/libs -type f))
+          echo "jar_name=$JAR_NAME" >> $GITHUB_OUTPUT
+
+      - name: Upload jar
         uses: actions/upload-artifact@v7
         with:
           name: jar
-          path: api/build/libs/salesbook.jar
+          path: build/libs/{{ steps.extract-jar.outputs.jar_name }}
 
   deploy:
     needs: build
@@ -57,6 +63,9 @@ jobs:
         uses: actions/download-artifact@v7
         with:
           name: jar
+
+      - name: Renomeia jar
+        run: mv {{needs.build.outputs.jar_name }} salesbook.jar
 
       - name: Enviar o .jar para o EC2
         uses: appleboy/scp-action@v1
