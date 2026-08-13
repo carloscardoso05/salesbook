@@ -52,7 +52,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: jar
-          path: build/libs/$JAR_NAME
+          path: build/libs/${{ steps.extract-jar.outputs.jar_name }}
 
   deploy:
     needs: build
