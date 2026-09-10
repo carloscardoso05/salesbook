@@ -1,0 +1,358 @@
+import type { RxDocument } from 'rxdb'
+import type {
+  CustomerDocType,
+  OrderDocType,
+  OrderItemDocType,
+  PaymentDocType,
+  ProductDocType,
+  SalesbookDatabase,
+} from '../db/types'
+import { newId } from '../utils/id'
+import { cleanName, normalizeName } from '../utils/text'
+import {
+  CustomerNotFoundError,
+  DuplicateNameError,
+  InsufficientStockError,
+  InvalidNameError,
+  InvalidPaymentError,
+  InvalidPriceError,
+  InvalidStockError,
+  OrderItemNotFoundError,
+  OrderNotFoundError,
+  ProductNotFoundError,
+  ReferencedEntityError,
+} from './errors'
+
+class Mutex {
+  private queue: Promise<unknown> = Promise.resolve()
+
+  run<T>(task: () => Promise<T>): Promise<T> {
+    const result = this.queue.then(task, task)
+    this.queue = result.catch(() => undefined)
+    return result
+  }
+}
+
+function validateName(name: string): string {
+  const cleaned = cleanName(name)
+  if (cleaned.length === 0) throw new InvalidNameError()
+  return cleaned
+}
+
+function validatePrice(price: number): number {
+  if (!Number.isFinite(price) || price < 0) throw new InvalidPriceError()
+  return price
+}
+
+function validateStockQuantity(quantity: number): number {
+  if (!Number.isInteger(quantity) || quantity < 0) throw new InvalidStockError()
+  return quantity
+}
+
+function validatePaymentAmount(amount: number): number {
+  if (!Number.isFinite(amount) || amount <= 0) throw new InvalidPaymentError()
+  return amount
+}
+
+export function createSalesbookService(db: SalesbookDatabase) {
+  const mutex = new Mutex()
+
+  async function assertCustomerNameAvailable(
+    normalized: string,
+    excludeId?: string,
+  ): Promise<void> {
+    const existing = await db.customers.findOne({ selector: { nameNormalized: normalized } }).exec()
+    if (existing && existing.id !== excludeId) {
+      throw new DuplicateNameError('cliente', existing.name)
+    }
+  }
+
+  async function assertProductNameAvailable(normalized: string, excludeId?: string): Promise<void> {
+    const existing = await db.products.findOne({ selector: { nameNormalized: normalized } }).exec()
+    if (existing && existing.id !== excludeId) {
+      throw new DuplicateNameError('produto', existing.name)
+    }
+  }
+
+  async function createCustomer(name: string): Promise<CustomerDocType> {
+    return mutex.run(async () => {
+      const displayName = validateName(name)
+      const normalized = normalizeName(displayName)
+      await assertCustomerNameAvailable(normalized)
+      const doc = await db.customers.insert({
+        id: newId(),
+        name: displayName,
+        nameNormalized: normalized,
+        balance: 0,
+      })
+      return doc.toMutableJSON()
+    })
+  }
+
+  async function updateCustomerName(id: string, name: string): Promise<void> {
+    await mutex.run(async () => {
+      const customer = await db.customers.findOne(id).exec()
+      if (!customer) throw new CustomerNotFoundError()
+      const displayName = validateName(name)
+      const normalized = normalizeName(displayName)
+      await assertCustomerNameAvailable(normalized, id)
+      await customer.incrementalModify((data) => {
+        data.name = displayName
+        data.nameNormalized = normalized
+        return data
+      })
+    })
+  }
+
+  async function removeCustomer(id: string): Promise<void> {
+    await mutex.run(async () => {
+      const customer = await db.customers.findOne(id).exec()
+      if (!customer) throw new CustomerNotFoundError()
+      const orderCount = await db.orders.count({ selector: { customerId: id } }).exec()
+      const paymentCount = await db.payments.count({ selector: { customerId: id } }).exec()
+      if (orderCount > 0 || paymentCount > 0) {
+        throw new ReferencedEntityError('cliente', 'existem pedidos ou pagamentos vinculados.')
+      }
+      await customer.remove()
+    })
+  }
+
+  async function createProduct(name: string, stockQuantity = 0): Promise<ProductDocType> {
+    return mutex.run(async () => {
+      const displayName = validateName(name)
+      const normalized = normalizeName(displayName)
+      const stock = validateStockQuantity(stockQuantity)
+      await assertProductNameAvailable(normalized)
+      const doc = await db.products.insert({
+        id: newId(),
+        name: displayName,
+        nameNormalized: normalized,
+        stockQuantity: stock,
+      })
+      return doc.toMutableJSON()
+    })
+  }
+
+  async function updateProduct(
+    id: string,
+    changes: { name?: string; stockQuantity?: number },
+  ): Promise<void> {
+    await mutex.run(async () => {
+      const product = await db.products.findOne(id).exec()
+      if (!product) throw new ProductNotFoundError()
+      const nextName = changes.name === undefined ? product.name : validateName(changes.name)
+      const nextNormalized = normalizeName(nextName)
+      const nextStock =
+        changes.stockQuantity === undefined
+          ? product.stockQuantity
+          : validateStockQuantity(changes.stockQuantity)
+      if (nextNormalized !== product.nameNormalized) {
+        await assertProductNameAvailable(nextNormalized, id)
+      }
+      await product.incrementalModify((data) => {
+        data.name = nextName
+        data.nameNormalized = nextNormalized
+        data.stockQuantity = nextStock
+        return data
+      })
+    })
+  }
+
+  async function removeProduct(id: string): Promise<void> {
+    await mutex.run(async () => {
+      const product = await db.products.findOne(id).exec()
+      if (!product) throw new ProductNotFoundError()
+      const itemCount = await db.orderitems.count({ selector: { productId: id } }).exec()
+      if (itemCount > 0) {
+        throw new ReferencedEntityError('produto', 'existem itens de pedido vinculados.')
+      }
+      await product.remove()
+    })
+  }
+
+  async function createOrder(customerId: string): Promise<OrderDocType> {
+    return mutex.run(async () => {
+      const customer = await db.customers.findOne(customerId).exec()
+      if (!customer) throw new CustomerNotFoundError()
+      const doc = await db.orders.insert({
+        id: newId(),
+        customerId: customer.id,
+        createdAt: new Date().toISOString(),
+      })
+      return doc.toMutableJSON()
+    })
+  }
+
+  async function addOrderItem(input: {
+    orderId: string
+    productId: string
+    price: number
+  }): Promise<OrderItemDocType> {
+    return mutex.run(async () => {
+      const price = validatePrice(input.price)
+      const order = await db.orders.findOne(input.orderId).exec()
+      if (!order) throw new OrderNotFoundError()
+      const product = await db.products.findOne(input.productId).exec()
+      if (!product) throw new ProductNotFoundError()
+      const customer = await db.customers.findOne(order.customerId).exec()
+      if (!customer) throw new CustomerNotFoundError()
+      if (product.stockQuantity < 1) throw new InsufficientStockError(product.name)
+
+      let stockDebited = false
+      let balanceDebited = false
+      try {
+        await product.incrementalModify((data) => {
+          if (data.stockQuantity < 1) throw new InsufficientStockError(data.name)
+          data.stockQuantity -= 1
+          return data
+        })
+        stockDebited = true
+
+        await customer.incrementalModify((data) => {
+          data.balance -= price
+          return data
+        })
+        balanceDebited = true
+
+        const item = await db.orderitems.insert({
+          id: newId(),
+          orderId: order.id,
+          productId: product.id,
+          price,
+        })
+        return item.toMutableJSON()
+      } catch (error) {
+        if (balanceDebited) {
+          await customer
+            .incrementalModify((data) => {
+              data.balance += price
+              return data
+            })
+            .catch(() => undefined)
+        }
+        if (stockDebited) {
+          await product
+            .incrementalModify((data) => {
+              data.stockQuantity += 1
+              return data
+            })
+            .catch(() => undefined)
+        }
+        throw error
+      }
+    })
+  }
+
+  async function removeOrderItemDocument(item: RxDocument<OrderItemDocType>): Promise<void> {
+    const order = await db.orders.findOne(item.orderId).exec()
+    const product = await db.products.findOne(item.productId).exec()
+    const customer = order ? await db.customers.findOne(order.customerId).exec() : null
+
+    let stockRestored = false
+    let balanceCredited = false
+    try {
+      if (product) {
+        await product.incrementalModify((data) => {
+          data.stockQuantity += 1
+          return data
+        })
+        stockRestored = true
+      }
+      if (customer) {
+        await customer.incrementalModify((data) => {
+          data.balance += item.price
+          return data
+        })
+        balanceCredited = true
+      }
+      await item.remove()
+    } catch (error) {
+      if (balanceCredited && customer) {
+        await customer
+          .incrementalModify((data) => {
+            data.balance -= item.price
+            return data
+          })
+          .catch(() => undefined)
+      }
+      if (stockRestored && product) {
+        await product
+          .incrementalModify((data) => {
+            data.stockQuantity -= 1
+            return data
+          })
+          .catch(() => undefined)
+      }
+      throw error
+    }
+  }
+
+  async function removeOrderItem(itemId: string): Promise<void> {
+    await mutex.run(async () => {
+      const item = await db.orderitems.findOne(itemId).exec()
+      if (!item) throw new OrderItemNotFoundError()
+      await removeOrderItemDocument(item)
+    })
+  }
+
+  async function removeOrder(orderId: string): Promise<void> {
+    await mutex.run(async () => {
+      const order = await db.orders.findOne(orderId).exec()
+      if (!order) throw new OrderNotFoundError()
+      const items = await db.orderitems.find({ selector: { orderId } }).exec()
+      for (const item of items) {
+        await removeOrderItemDocument(item)
+      }
+      await order.remove()
+    })
+  }
+
+  async function addPayment(input: {
+    customerId: string
+    amount: number
+  }): Promise<PaymentDocType> {
+    return mutex.run(async () => {
+      const amount = validatePaymentAmount(input.amount)
+      const customer = await db.customers.findOne(input.customerId).exec()
+      if (!customer) throw new CustomerNotFoundError()
+
+      await customer.incrementalModify((data) => {
+        data.balance += amount
+        return data
+      })
+      try {
+        const payment = await db.payments.insert({
+          id: newId(),
+          customerId: customer.id,
+          amount,
+          createdAt: new Date().toISOString(),
+        })
+        return payment.toMutableJSON()
+      } catch (error) {
+        await customer
+          .incrementalModify((data) => {
+            data.balance -= amount
+            return data
+          })
+          .catch(() => undefined)
+        throw error
+      }
+    })
+  }
+
+  return {
+    createCustomer,
+    updateCustomerName,
+    removeCustomer,
+    createProduct,
+    updateProduct,
+    removeProduct,
+    createOrder,
+    addOrderItem,
+    removeOrderItem,
+    removeOrder,
+    addPayment,
+  }
+}
+
+export type SalesbookService = ReturnType<typeof createSalesbookService>
