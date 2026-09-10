@@ -5,9 +5,11 @@ import type { SalesbookDatabase } from '../src/db/types'
 import {
   DuplicateNameError,
   InsufficientStockError,
+  InvalidBalanceError,
   InvalidPaymentError,
   InvalidPriceError,
   InvalidQuantityError,
+  NoBalanceChangeError,
   ReferencedEntityError,
 } from '../src/services/errors'
 import { createSalesbookService, type SalesbookService } from '../src/services/salesbook'
@@ -312,6 +314,114 @@ describe('updatePayment e removePayment', () => {
 
     expect(await db.payments.count().exec()).toBe(0)
     expect((await readCustomer(customer.id)).balance).toBe(-30)
+  })
+})
+
+describe('saldo inicial do cliente', () => {
+  it('cadastra com saldo inicial e registra o ajuste no histórico', async () => {
+    const customer = await service.createCustomer('Maria', -25.5)
+
+    expect((await readCustomer(customer.id)).balance).toBe(-25.5)
+    const adjustments = await db.adjustments
+      .find({ selector: { customerId: customer.id } })
+      .exec()
+    expect(adjustments).toHaveLength(1)
+    expect(adjustments[0]?.amount).toBe(-25.5)
+  })
+
+  it('não registra ajuste quando o saldo inicial é zero', async () => {
+    const customer = await service.createCustomer('Maria')
+
+    expect((await readCustomer(customer.id)).balance).toBe(0)
+    expect(await db.adjustments.count().exec()).toBe(0)
+  })
+
+  it('rejeita saldo inicial inválido sem cadastrar', async () => {
+    await expect(service.createCustomer('Maria', Number.NaN)).rejects.toBeInstanceOf(
+      InvalidBalanceError,
+    )
+    await expect(service.createCustomer('Maria', Number.POSITIVE_INFINITY)).rejects.toBeInstanceOf(
+      InvalidBalanceError,
+    )
+    expect(await db.customers.count().exec()).toBe(0)
+  })
+})
+
+describe('ajustes de saldo', () => {
+  it('cria ajustes positivos e negativos refletindo no saldo', async () => {
+    const customer = await service.createCustomer('Maria')
+
+    await service.createBalanceAdjustment({ customerId: customer.id, newBalance: 30 })
+    expect((await readCustomer(customer.id)).balance).toBe(30)
+
+    await service.createBalanceAdjustment({ customerId: customer.id, newBalance: -10 })
+    expect((await readCustomer(customer.id)).balance).toBe(-10)
+    expect(await db.adjustments.count().exec()).toBe(2)
+  })
+
+  it('rejeita ajuste sem diferença', async () => {
+    const customer = await service.createCustomer('Maria', 15)
+
+    await expect(
+      service.createBalanceAdjustment({ customerId: customer.id, newBalance: 15 }),
+    ).rejects.toBeInstanceOf(NoBalanceChangeError)
+
+    expect((await readCustomer(customer.id)).balance).toBe(15)
+    expect(await db.adjustments.count().exec()).toBe(1)
+  })
+
+  it('edita o ajuste definindo o novo saldo desejado', async () => {
+    const customer = await service.createCustomer('Maria')
+    const adjustment = await service.createBalanceAdjustment({
+      customerId: customer.id,
+      newBalance: 20,
+    })
+
+    await service.updateAdjustment(adjustment.id, { newBalance: 50 })
+    expect((await readCustomer(customer.id)).balance).toBe(50)
+    const stored = await db.adjustments.findOne(adjustment.id).exec()
+    expect(stored?.amount).toBe(50)
+
+    await service.updateAdjustment(adjustment.id, { newBalance: 5 })
+    expect((await readCustomer(customer.id)).balance).toBe(5)
+    expect((await db.adjustments.findOne(adjustment.id).exec())?.amount).toBe(5)
+  })
+
+  it('rejeita edição que não altera o ajuste', async () => {
+    const customer = await service.createCustomer('Maria')
+    const adjustment = await service.createBalanceAdjustment({
+      customerId: customer.id,
+      newBalance: 20,
+    })
+
+    await expect(
+      service.updateAdjustment(adjustment.id, { newBalance: 20 }),
+    ).rejects.toBeInstanceOf(NoBalanceChangeError)
+
+    expect((await readCustomer(customer.id)).balance).toBe(20)
+    expect((await db.adjustments.findOne(adjustment.id).exec())?.amount).toBe(20)
+  })
+
+  it('exclui o ajuste revertendo o efeito no saldo', async () => {
+    const customer = await service.createCustomer('Maria')
+    const adjustment = await service.createBalanceAdjustment({
+      customerId: customer.id,
+      newBalance: 20,
+    })
+
+    await service.removeAdjustment(adjustment.id)
+
+    expect(await db.adjustments.count().exec()).toBe(0)
+    expect((await readCustomer(customer.id)).balance).toBe(0)
+  })
+
+  it('bloqueia excluir cliente com ajustes vinculados', async () => {
+    const customer = await service.createCustomer('Maria', 10)
+
+    await expect(service.removeCustomer(customer.id)).rejects.toBeInstanceOf(
+      ReferencedEntityError,
+    )
+    expect(await db.customers.count().exec()).toBe(1)
   })
 })
 

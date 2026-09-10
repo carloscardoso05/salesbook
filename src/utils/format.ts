@@ -16,6 +16,12 @@ export function formatBRL(value: number): string {
   return brlFormatter.format(value)
 }
 
+export function formatSignedBRL(value: number): string {
+  if (value === 0) return brlFormatter.format(0)
+  const sign = value > 0 ? '+' : '-'
+  return `${sign} ${brlFormatter.format(Math.abs(value))}`
+}
+
 export function formatDateTime(iso: string): string {
   return dateTimeFormatter.format(new Date(iso))
 }

@@ -35,6 +35,24 @@ export class PaymentNotFoundError extends SalesbookError {
   }
 }
 
+export class AdjustmentNotFoundError extends SalesbookError {
+  constructor() {
+    super('Ajuste não encontrado.')
+  }
+}
+
+export class InvalidBalanceError extends SalesbookError {
+  constructor() {
+    super('Informe um saldo válido.')
+  }
+}
+
+export class NoBalanceChangeError extends SalesbookError {
+  constructor(message = 'O saldo informado já é o saldo atual.') {
+    super(message)
+  }
+}
+
 export class InvalidQuantityError extends SalesbookError {
   constructor() {
     super('A quantidade deve ser um número inteiro maior ou igual a 1.')

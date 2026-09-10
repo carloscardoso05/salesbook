@@ -1,5 +1,6 @@
 import type { RxDocument } from 'rxdb'
 import type {
+  AdjustmentDocType,
   CustomerDocType,
   OrderDocType,
   OrderItemDocType,
@@ -10,14 +11,17 @@ import type {
 import { newId } from '../utils/id'
 import { cleanName, normalizeName } from '../utils/text'
 import {
+  AdjustmentNotFoundError,
   CustomerNotFoundError,
   DuplicateNameError,
   InsufficientStockError,
+  InvalidBalanceError,
   InvalidNameError,
   InvalidPaymentError,
   InvalidPriceError,
   InvalidQuantityError,
   InvalidStockError,
+  NoBalanceChangeError,
   OrderItemNotFoundError,
   OrderNotFoundError,
   PaymentNotFoundError,
@@ -61,6 +65,15 @@ function validatePaymentAmount(amount: number): number {
   return amount
 }
 
+function validateBalance(balance: number): number {
+  if (!Number.isFinite(balance)) throw new InvalidBalanceError()
+  return balance
+}
+
+function roundCents(value: number): number {
+  return Math.round(value * 100) / 100
+}
+
 export function createSalesbookService(db: SalesbookDatabase) {
   const mutex = new Mutex()
 
@@ -81,17 +94,31 @@ export function createSalesbookService(db: SalesbookDatabase) {
     }
   }
 
-  async function createCustomer(name: string): Promise<CustomerDocType> {
+  async function createCustomer(name: string, initialBalance = 0): Promise<CustomerDocType> {
     return mutex.run(async () => {
       const displayName = validateName(name)
       const normalized = normalizeName(displayName)
+      const balance = roundCents(validateBalance(initialBalance))
       await assertCustomerNameAvailable(normalized)
       const doc = await db.customers.insert({
         id: newId(),
         name: displayName,
         nameNormalized: normalized,
-        balance: 0,
+        balance,
       })
+      if (balance !== 0) {
+        try {
+          await db.adjustments.insert({
+            id: newId(),
+            customerId: doc.id,
+            amount: balance,
+            createdAt: new Date().toISOString(),
+          })
+        } catch (error) {
+          await doc.remove().catch(() => undefined)
+          throw error
+        }
+      }
       return doc.toMutableJSON()
     })
   }
@@ -117,8 +144,12 @@ export function createSalesbookService(db: SalesbookDatabase) {
       if (!customer) throw new CustomerNotFoundError()
       const orderCount = await db.orders.count({ selector: { customerId: id } }).exec()
       const paymentCount = await db.payments.count({ selector: { customerId: id } }).exec()
-      if (orderCount > 0 || paymentCount > 0) {
-        throw new ReferencedEntityError('cliente', 'existem pedidos ou pagamentos vinculados.')
+      const adjustmentCount = await db.adjustments.count({ selector: { customerId: id } }).exec()
+      if (orderCount > 0 || paymentCount > 0 || adjustmentCount > 0) {
+        throw new ReferencedEntityError(
+          'cliente',
+          'existem pedidos, pagamentos ou ajustes vinculados.',
+        )
       }
       await customer.remove()
     })
@@ -424,6 +455,113 @@ export function createSalesbookService(db: SalesbookDatabase) {
     })
   }
 
+  async function createBalanceAdjustment(input: {
+    customerId: string
+    newBalance: number
+  }): Promise<AdjustmentDocType> {
+    return mutex.run(async () => {
+      const newBalance = roundCents(validateBalance(input.newBalance))
+      const customer = await db.customers.findOne(input.customerId).exec()
+      if (!customer) throw new CustomerNotFoundError()
+
+      const delta = roundCents(newBalance - customer.balance)
+      if (delta === 0) throw new NoBalanceChangeError()
+
+      await customer.incrementalModify((data) => {
+        data.balance += delta
+        return data
+      })
+      try {
+        const adjustment = await db.adjustments.insert({
+          id: newId(),
+          customerId: customer.id,
+          amount: delta,
+          createdAt: new Date().toISOString(),
+        })
+        return adjustment.toMutableJSON()
+      } catch (error) {
+        await customer
+          .incrementalModify((data) => {
+            data.balance -= delta
+            return data
+          })
+          .catch(() => undefined)
+        throw error
+      }
+    })
+  }
+
+  async function updateAdjustment(
+    adjustmentId: string,
+    changes: { newBalance: number },
+  ): Promise<void> {
+    await mutex.run(async () => {
+      const newBalance = roundCents(validateBalance(changes.newBalance))
+      const adjustment = await db.adjustments.findOne(adjustmentId).exec()
+      if (!adjustment) throw new AdjustmentNotFoundError()
+      const customer = await db.customers.findOne(adjustment.customerId).exec()
+      if (!customer) throw new CustomerNotFoundError()
+
+      const balanceWithoutAdjustment = customer.balance - adjustment.amount
+      const newDelta = roundCents(newBalance - balanceWithoutAdjustment)
+      if (newDelta === adjustment.amount) {
+        throw new NoBalanceChangeError(
+          'O novo saldo não altera este ajuste. Para removê-lo, exclua o ajuste.',
+        )
+      }
+      const balanceDelta = roundCents(newDelta - adjustment.amount)
+
+      await customer.incrementalModify((data) => {
+        data.balance += balanceDelta
+        return data
+      })
+      try {
+        await adjustment.incrementalModify((data) => {
+          data.amount = newDelta
+          return data
+        })
+      } catch (error) {
+        await customer
+          .incrementalModify((data) => {
+            data.balance -= balanceDelta
+            return data
+          })
+          .catch(() => undefined)
+        throw error
+      }
+    })
+  }
+
+  async function removeAdjustment(adjustmentId: string): Promise<void> {
+    await mutex.run(async () => {
+      const adjustment = await db.adjustments.findOne(adjustmentId).exec()
+      if (!adjustment) throw new AdjustmentNotFoundError()
+      const customer = await db.customers.findOne(adjustment.customerId).exec()
+
+      let balanceRestored = false
+      try {
+        if (customer) {
+          await customer.incrementalModify((data) => {
+            data.balance -= adjustment.amount
+            return data
+          })
+          balanceRestored = true
+        }
+        await adjustment.remove()
+      } catch (error) {
+        if (balanceRestored && customer) {
+          await customer
+            .incrementalModify((data) => {
+              data.balance += adjustment.amount
+              return data
+            })
+            .catch(() => undefined)
+        }
+        throw error
+      }
+    })
+  }
+
   return {
     createCustomer,
     updateCustomerName,
@@ -439,6 +577,9 @@ export function createSalesbookService(db: SalesbookDatabase) {
     addPayment,
     updatePayment,
     removePayment,
+    createBalanceAdjustment,
+    updateAdjustment,
+    removeAdjustment,
   }
 }
 

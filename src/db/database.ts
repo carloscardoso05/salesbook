@@ -3,6 +3,7 @@ import { RxDBDevModePlugin } from 'rxdb/plugins/dev-mode'
 import { getRxStorageDexie } from 'rxdb/plugins/storage-dexie'
 import { wrappedValidateAjvStorage } from 'rxdb/plugins/validate-ajv'
 import {
+  adjustmentSchema,
   customerSchema,
   orderItemSchema,
   orderSchema,
@@ -41,6 +42,7 @@ export async function createSalesbookDatabase(
     orders: { schema: orderSchema },
     orderitems: { schema: orderItemSchema },
     payments: { schema: paymentSchema },
+    adjustments: { schema: adjustmentSchema },
   })
 
   return db

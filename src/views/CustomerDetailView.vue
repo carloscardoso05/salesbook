@@ -10,12 +10,13 @@ import { useDatabase, useSalesbook } from '../composables/useDatabase'
 import { useRxQuery } from '../composables/useRxQuery'
 import { errorMessage, toast } from '../composables/useToast'
 import type {
+  AdjustmentDocType,
   CustomerDocType,
   OrderDocType,
   OrderItemDocType,
   PaymentDocType,
 } from '../db/types'
-import { formatBRL, formatDateTime } from '../utils/format'
+import { formatBRL, formatDateTime, formatSignedBRL } from '../utils/format'
 
 const route = useRoute()
 const router = useRouter()
@@ -48,6 +49,15 @@ const payments = useRxQuery<PaymentDocType>(
   [customerId],
 )
 
+const adjustments = useRxQuery<AdjustmentDocType>(
+  () =>
+    db.adjustments.find({
+      selector: { customerId: { $eq: customerId.value } },
+      sort: [{ createdAt: 'desc' }],
+    }),
+  [customerId],
+)
+
 const allItems = useRxQuery<OrderItemDocType>(() => db.orderitems.find())
 
 const orderTotals = computed(() => {
@@ -71,6 +81,28 @@ const editName = ref('')
 const saving = ref(false)
 const isRemoveOpen = ref(false)
 const removing = ref(false)
+
+const isAdjustOpen = ref(false)
+const adjustBalance = ref<number | null>(null)
+const savingAdjust = ref(false)
+
+const editingAdjustment = ref<AdjustmentDocType | null>(null)
+const editAdjustBalance = ref<number | null>(null)
+const savingEditAdjust = ref(false)
+
+const adjustmentToRemove = ref<AdjustmentDocType | null>(null)
+const removingAdjust = ref(false)
+
+const adjustDelta = computed(() => {
+  if (!customer.value || adjustBalance.value === null) return 0
+  return Math.round((Number(adjustBalance.value) - customer.value.balance) * 100) / 100
+})
+
+const editAdjustDelta = computed(() => {
+  if (!customer.value || !editingAdjustment.value || editAdjustBalance.value === null) return 0
+  const balanceWithoutAdjustment = customer.value.balance - editingAdjustment.value.amount
+  return Math.round((Number(editAdjustBalance.value) - balanceWithoutAdjustment) * 100) / 100
+})
 
 function openEdit(): void {
   if (!customer.value) return
@@ -105,12 +137,77 @@ async function removeCustomer(): Promise<void> {
     removing.value = false
   }
 }
+
+function openAdjust(): void {
+  if (!customer.value) return
+  adjustBalance.value = customer.value.balance
+  isAdjustOpen.value = true
+}
+
+async function saveAdjust(): Promise<void> {
+  if (!customer.value) return
+  savingAdjust.value = true
+  try {
+    await service.createBalanceAdjustment({
+      customerId: customer.value.id,
+      newBalance: Number(adjustBalance.value),
+    })
+    toast.success('Saldo ajustado.')
+    isAdjustOpen.value = false
+  } catch (error) {
+    toast.error(errorMessage(error))
+  } finally {
+    savingAdjust.value = false
+  }
+}
+
+function openEditAdjustment(adjustment: AdjustmentDocType): void {
+  if (!customer.value) return
+  editingAdjustment.value = adjustment
+  editAdjustBalance.value = customer.value.balance
+}
+
+async function saveEditAdjustment(): Promise<void> {
+  if (!editingAdjustment.value) return
+  savingEditAdjust.value = true
+  try {
+    await service.updateAdjustment(editingAdjustment.value.id, {
+      newBalance: Number(editAdjustBalance.value),
+    })
+    toast.success('Ajuste atualizado.')
+    editingAdjustment.value = null
+  } catch (error) {
+    toast.error(errorMessage(error))
+  } finally {
+    savingEditAdjust.value = false
+  }
+}
+
+async function confirmRemoveAdjustment(): Promise<void> {
+  if (!adjustmentToRemove.value) return
+  removingAdjust.value = true
+  try {
+    await service.removeAdjustment(adjustmentToRemove.value.id)
+    toast.success('Ajuste excluído e saldo atualizado.')
+    adjustmentToRemove.value = null
+  } catch (error) {
+    toast.error(errorMessage(error))
+  } finally {
+    removingAdjust.value = false
+  }
+}
+
+function adjustmentRemovalMessage(): string {
+  if (!adjustmentToRemove.value || !customer.value) return ''
+  const after = customer.value.balance - adjustmentToRemove.value.amount
+  return `Excluir este ajuste de ${formatSignedBRL(adjustmentToRemove.value.amount)} altera o saldo do cliente de ${formatBRL(customer.value.balance)} para ${formatBRL(after)}. Deseja continuar?`
+}
 </script>
 
 <template>
   <RouterLink
     to="/customers"
-    class="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-slate-800"
+    class="tap-row mb-4 inline-flex items-center gap-1.5 rounded-lg px-1 text-sm font-medium text-slate-500 hover:text-slate-800"
   >
     <AppIcon name="arrowLeft" class="h-4 w-4" />
     Clientes
@@ -122,6 +219,10 @@ async function removeCustomer(): Promise<void> {
         <button type="button" class="btn btn-secondary" @click="openEdit">
           <AppIcon name="pencil" class="h-4 w-4" />
           Editar
+        </button>
+        <button type="button" class="btn btn-secondary" @click="openAdjust">
+          <AppIcon name="adjustments" class="h-4 w-4" />
+          Ajustar saldo
         </button>
         <RouterLink
           :to="{ path: '/payments', query: { customerId: customer.id } }"
@@ -211,6 +312,54 @@ async function removeCustomer(): Promise<void> {
           </li>
         </ul>
       </section>
+
+      <section class="card card-pad">
+        <div class="mb-3 flex items-center justify-between">
+          <h2 class="text-sm font-semibold text-slate-900">Ajustes</h2>
+          <button
+            type="button"
+            class="btn btn-ghost btn-icon text-slate-400 hover:text-indigo-600"
+            aria-label="Ajustar saldo"
+            @click="openAdjust"
+          >
+            <AppIcon name="plus" class="h-5 w-5" />
+          </button>
+        </div>
+        <EmptyState v-if="adjustments.length === 0" icon="adjustments" title="Nenhum ajuste" />
+        <ul v-else class="divide-y divide-slate-100">
+          <li
+            v-for="adjustment in adjustments"
+            :key="adjustment.id"
+            class="flex items-center gap-2 py-2.5"
+          >
+            <p class="min-w-0 flex-1 text-sm text-slate-600">
+              {{ formatDateTime(adjustment.createdAt) }}
+            </p>
+            <span
+              class="text-sm font-semibold"
+              :class="adjustment.amount > 0 ? 'text-emerald-600' : 'text-red-600'"
+            >
+              {{ formatSignedBRL(adjustment.amount) }}
+            </span>
+            <button
+              type="button"
+              class="btn btn-ghost btn-icon text-slate-400 hover:text-indigo-600"
+              aria-label="Editar ajuste"
+              @click="openEditAdjustment(adjustment)"
+            >
+              <AppIcon name="pencil" class="h-5 w-5" />
+            </button>
+            <button
+              type="button"
+              class="btn btn-ghost btn-icon text-slate-400 hover:text-red-600"
+              aria-label="Excluir ajuste"
+              @click="adjustmentToRemove = adjustment"
+            >
+              <AppIcon name="trash" class="h-5 w-5" />
+            </button>
+          </li>
+        </ul>
+      </section>
     </div>
   </template>
 
@@ -247,6 +396,97 @@ async function removeCustomer(): Promise<void> {
     </form>
   </ModalDialog>
 
+  <ModalDialog :open="isAdjustOpen" title="Ajustar saldo" @close="isAdjustOpen = false">
+    <form class="space-y-4" @submit.prevent="saveAdjust">
+      <div>
+        <label class="label" for="adjust-balance">Novo saldo (R$)</label>
+        <input
+          id="adjust-balance"
+          v-model.number="adjustBalance"
+          class="input"
+          type="number"
+          step="0.01"
+          required
+        />
+        <p class="mt-1.5 text-xs text-slate-500">
+          Saldo atual: {{ customer ? formatBRL(customer.balance) : '' }}
+        </p>
+        <p
+          class="mt-1 text-xs"
+          :class="
+            adjustDelta === 0
+              ? 'text-slate-500'
+              : adjustDelta > 0
+                ? 'text-emerald-600'
+                : 'text-red-600'
+          "
+        >
+          {{
+            adjustDelta === 0
+              ? 'Sem alteração no saldo.'
+              : 'Diferença: ' + formatSignedBRL(adjustDelta)
+          }}
+        </p>
+      </div>
+      <div class="flex justify-end gap-2">
+        <button type="button" class="btn btn-secondary" @click="isAdjustOpen = false">
+          Cancelar
+        </button>
+        <button type="submit" class="btn btn-primary" :disabled="savingAdjust">
+          {{ savingAdjust ? 'Salvando...' : 'Salvar' }}
+        </button>
+      </div>
+    </form>
+  </ModalDialog>
+
+  <ModalDialog
+    :open="editingAdjustment !== null"
+    title="Editar ajuste"
+    @close="editingAdjustment = null"
+  >
+    <form class="space-y-4" @submit.prevent="saveEditAdjustment">
+      <div>
+        <label class="label" for="edit-adjust-balance">Novo saldo (R$)</label>
+        <input
+          id="edit-adjust-balance"
+          v-model.number="editAdjustBalance"
+          class="input"
+          type="number"
+          step="0.01"
+          required
+        />
+        <p class="mt-1.5 text-xs text-slate-500">
+          Ajuste atual:
+          {{ editingAdjustment ? formatSignedBRL(editingAdjustment.amount) : '' }}
+        </p>
+        <p
+          class="mt-1 text-xs"
+          :class="
+            editAdjustDelta === 0
+              ? 'text-slate-500'
+              : editAdjustDelta > 0
+                ? 'text-emerald-600'
+                : 'text-red-600'
+          "
+        >
+          {{
+            editAdjustDelta === 0
+              ? 'Sem alteração no ajuste.'
+              : 'Novo ajuste: ' + formatSignedBRL(editAdjustDelta)
+          }}
+        </p>
+      </div>
+      <div class="flex justify-end gap-2">
+        <button type="button" class="btn btn-secondary" @click="editingAdjustment = null">
+          Cancelar
+        </button>
+        <button type="submit" class="btn btn-primary" :disabled="savingEditAdjust">
+          {{ savingEditAdjust ? 'Salvando...' : 'Salvar' }}
+        </button>
+      </div>
+    </form>
+  </ModalDialog>
+
   <ConfirmDialog
     :open="isRemoveOpen"
     title="Excluir cliente"
@@ -256,5 +496,16 @@ async function removeCustomer(): Promise<void> {
     :busy="removing"
     @cancel="isRemoveOpen = false"
     @confirm="removeCustomer"
+  />
+
+  <ConfirmDialog
+    :open="adjustmentToRemove !== null"
+    title="Excluir ajuste"
+    :message="adjustmentRemovalMessage()"
+    confirm-label="Excluir"
+    danger
+    :busy="removingAdjust"
+    @cancel="adjustmentToRemove = null"
+    @confirm="confirmRemoveAdjustment"
   />
 </template>

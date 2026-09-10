@@ -21,19 +21,21 @@ const customers = useRxQuery<CustomerDocType>(() =>
 
 const isFormOpen = ref(false)
 const name = ref('')
+const initialBalance = ref<number | null>(0)
 const saving = ref(false)
 const customerToRemove = ref<CustomerDocType | null>(null)
 const removing = ref(false)
 
 function openForm(): void {
   name.value = ''
+  initialBalance.value = 0
   isFormOpen.value = true
 }
 
 async function submit(): Promise<void> {
   saving.value = true
   try {
-    await service.createCustomer(name.value)
+    await service.createCustomer(name.value, Number(initialBalance.value) || 0)
     toast.success('Cliente criado.')
     isFormOpen.value = false
   } catch (error) {
@@ -126,6 +128,20 @@ async function confirmRemove(): Promise<void> {
           placeholder="Ex.: Maria Souza"
         />
         <p class="mt-1.5 text-xs text-slate-500">O nome precisa ser único.</p>
+      </div>
+      <div>
+        <label class="label" for="customer-initial-balance">Saldo inicial (R$)</label>
+        <input
+          id="customer-initial-balance"
+          v-model.number="initialBalance"
+          class="input"
+          type="number"
+          step="0.01"
+          placeholder="0,00"
+        />
+        <p class="mt-1.5 text-xs text-slate-500">
+          Pode ser negativo. O valor será registrado como um ajuste no histórico.
+        </p>
       </div>
       <div class="flex justify-end gap-2">
         <button type="button" class="btn btn-secondary" @click="isFormOpen = false">

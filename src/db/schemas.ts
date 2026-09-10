@@ -1,5 +1,6 @@
 import type { RxJsonSchema } from 'rxdb'
 import type {
+  AdjustmentDocType,
   CustomerDocType,
   OrderDocType,
   OrderItemDocType,
@@ -77,6 +78,21 @@ export const paymentSchema: RxJsonSchema<PaymentDocType> = {
     id: idProperty,
     customerId: { type: 'string', maxLength: 100 },
     amount: { type: 'number', exclusiveMinimum: 0 },
+    createdAt: { type: 'string', maxLength: 32, format: 'date-time' },
+  },
+  required: ['id', 'customerId', 'amount', 'createdAt'],
+  indexes: ['customerId', 'createdAt'],
+}
+
+export const adjustmentSchema: RxJsonSchema<AdjustmentDocType> = {
+  title: 'adjustment',
+  version: 0,
+  primaryKey: 'id',
+  type: 'object',
+  properties: {
+    id: idProperty,
+    customerId: { type: 'string', maxLength: 100 },
+    amount: { type: 'number' },
     createdAt: { type: 'string', maxLength: 32, format: 'date-time' },
   },
   required: ['id', 'customerId', 'amount', 'createdAt'],
