@@ -27,15 +27,15 @@ const payments = useRxQuery<PaymentDocType>(() => db.payments.find())
 
 const totalToReceive = computed(() =>
   customers.value.reduce(
-    (total, customer) => total + (customer.balance < 0 ? -customer.balance : 0),
+    (total, customer) => total + (customer.balanceCents < 0 ? -customer.balanceCents : 0),
     0,
   ),
 )
 const totalReceived = computed(() =>
-  payments.value.reduce((total, payment) => total + payment.amount, 0),
+  payments.value.reduce((total, payment) => total + payment.amountCents, 0),
 )
 const totalSales = computed(() =>
-  orderItems.value.reduce((total, item) => total + item.price, 0),
+  orderItems.value.reduce((total, item) => total + item.priceCents, 0),
 )
 const lowStockProducts = computed(() =>
   products.value
@@ -55,7 +55,7 @@ const orderSummaries = computed(() => {
   const itemTotal = new Map<string, number>()
   for (const item of orderItems.value) {
     itemCount.set(item.orderId, (itemCount.get(item.orderId) ?? 0) + 1)
-    itemTotal.set(item.orderId, (itemTotal.get(item.orderId) ?? 0) + item.price)
+    itemTotal.set(item.orderId, (itemTotal.get(item.orderId) ?? 0) + item.priceCents)
   }
   return { itemCount, itemTotal }
 })

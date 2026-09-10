@@ -36,7 +36,7 @@ function openForm(): void {
 async function submit(): Promise<void> {
   saving.value = true
   try {
-    await service.createCustomer(name.value, Number(initialBalance.value) || 0)
+    await service.createCustomer(name.value, initialBalance.value ?? 0)
     toast.success('Cliente criado.')
     isFormOpen.value = false
   } catch (error) {
@@ -93,14 +93,14 @@ async function confirmRemove(): Promise<void> {
         <span
           class="badge"
           :class="
-            customer.balance < 0
+            customer.balanceCents < 0
               ? 'bg-red-100 text-red-700'
-              : customer.balance > 0
+              : customer.balanceCents > 0
                 ? 'bg-emerald-100 text-emerald-700'
                 : 'bg-slate-100 text-slate-600'
           "
         >
-          {{ formatBRL(customer.balance) }}
+          {{ formatBRL(customer.balanceCents) }}
         </span>
         <AppIcon name="chevronRight" class="h-4 w-4 shrink-0 text-slate-300" />
       </RouterLink>

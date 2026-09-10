@@ -45,9 +45,9 @@ function validateName(name: string): string {
   return cleaned
 }
 
-function validatePrice(price: number): number {
-  if (!Number.isFinite(price) || price < 0) throw new InvalidPriceError()
-  return price
+function validatePriceCents(priceCents: number): number {
+  if (!Number.isInteger(priceCents) || priceCents < 0) throw new InvalidPriceError()
+  return priceCents
 }
 
 function validateStockQuantity(quantity: number): number {
@@ -60,18 +60,14 @@ function validateItemQuantity(quantity: number): number {
   return quantity
 }
 
-function validatePaymentAmount(amount: number): number {
-  if (!Number.isFinite(amount) || amount <= 0) throw new InvalidPaymentError()
-  return amount
+function validatePaymentAmountCents(amountCents: number): number {
+  if (!Number.isInteger(amountCents) || amountCents <= 0) throw new InvalidPaymentError()
+  return amountCents
 }
 
-function validateBalance(balance: number): number {
-  if (!Number.isFinite(balance)) throw new InvalidBalanceError()
-  return balance
-}
-
-function roundCents(value: number): number {
-  return Math.round(value * 100) / 100
+function validateBalanceCents(balanceCents: number): number {
+  if (!Number.isInteger(balanceCents)) throw new InvalidBalanceError()
+  return balanceCents
 }
 
 export function createSalesbookService(db: SalesbookDatabase) {
@@ -94,24 +90,24 @@ export function createSalesbookService(db: SalesbookDatabase) {
     }
   }
 
-  async function createCustomer(name: string, initialBalance = 0): Promise<CustomerDocType> {
+  async function createCustomer(name: string, initialBalanceCents = 0): Promise<CustomerDocType> {
     return mutex.run(async () => {
       const displayName = validateName(name)
       const normalized = normalizeName(displayName)
-      const balance = roundCents(validateBalance(initialBalance))
+      const balanceCents = validateBalanceCents(initialBalanceCents)
       await assertCustomerNameAvailable(normalized)
       const doc = await db.customers.insert({
         id: newId(),
         name: displayName,
         nameNormalized: normalized,
-        balance,
+        balanceCents,
       })
-      if (balance !== 0) {
+      if (balanceCents !== 0) {
         try {
           await db.adjustments.insert({
             id: newId(),
             customerId: doc.id,
-            amount: balance,
+            amountCents: balanceCents,
             createdAt: new Date().toISOString(),
           })
         } catch (error) {
@@ -224,11 +220,11 @@ export function createSalesbookService(db: SalesbookDatabase) {
   async function addOrderItem(input: {
     orderId: string
     productId: string
-    price: number
+    priceCents: number
     quantity?: number
   }): Promise<OrderItemDocType[]> {
     return mutex.run(async () => {
-      const price = validatePrice(input.price)
+      const priceCents = validatePriceCents(input.priceCents)
       const quantity = validateItemQuantity(input.quantity ?? 1)
       const order = await db.orders.findOne(input.orderId).exec()
       if (!order) throw new OrderNotFoundError()
@@ -238,7 +234,7 @@ export function createSalesbookService(db: SalesbookDatabase) {
       if (!customer) throw new CustomerNotFoundError()
       if (product.stockQuantity < quantity) throw new InsufficientStockError(product.name)
 
-      const total = price * quantity
+      const totalCents = priceCents * quantity
       let stockDebited = false
       let balanceDebited = false
       try {
@@ -250,7 +246,7 @@ export function createSalesbookService(db: SalesbookDatabase) {
         stockDebited = true
 
         await customer.incrementalModify((data) => {
-          data.balance -= total
+          data.balanceCents -= totalCents
           return data
         })
         balanceDebited = true
@@ -261,7 +257,7 @@ export function createSalesbookService(db: SalesbookDatabase) {
             id: newId(),
             orderId: order.id,
             productId: product.id,
-            price,
+            priceCents,
           })
           items.push(item.toMutableJSON())
         }
@@ -270,7 +266,7 @@ export function createSalesbookService(db: SalesbookDatabase) {
         if (balanceDebited) {
           await customer
             .incrementalModify((data) => {
-              data.balance += total
+              data.balanceCents += totalCents
               return data
             })
             .catch(() => undefined)
@@ -305,7 +301,7 @@ export function createSalesbookService(db: SalesbookDatabase) {
       }
       if (customer) {
         await customer.incrementalModify((data) => {
-          data.balance += item.price
+          data.balanceCents += item.priceCents
           return data
         })
         balanceCredited = true
@@ -315,7 +311,7 @@ export function createSalesbookService(db: SalesbookDatabase) {
       if (balanceCredited && customer) {
         await customer
           .incrementalModify((data) => {
-            data.balance -= item.price
+            data.balanceCents -= item.priceCents
             return data
           })
           .catch(() => undefined)
@@ -364,29 +360,29 @@ export function createSalesbookService(db: SalesbookDatabase) {
 
   async function addPayment(input: {
     customerId: string
-    amount: number
+    amountCents: number
   }): Promise<PaymentDocType> {
     return mutex.run(async () => {
-      const amount = validatePaymentAmount(input.amount)
+      const amountCents = validatePaymentAmountCents(input.amountCents)
       const customer = await db.customers.findOne(input.customerId).exec()
       if (!customer) throw new CustomerNotFoundError()
 
       await customer.incrementalModify((data) => {
-        data.balance += amount
+        data.balanceCents += amountCents
         return data
       })
       try {
         const payment = await db.payments.insert({
           id: newId(),
           customerId: customer.id,
-          amount,
+          amountCents,
           createdAt: new Date().toISOString(),
         })
         return payment.toMutableJSON()
       } catch (error) {
         await customer
           .incrementalModify((data) => {
-            data.balance -= amount
+            data.balanceCents -= amountCents
             return data
           })
           .catch(() => undefined)
@@ -395,28 +391,31 @@ export function createSalesbookService(db: SalesbookDatabase) {
     })
   }
 
-  async function updatePayment(paymentId: string, changes: { amount: number }): Promise<void> {
+  async function updatePayment(
+    paymentId: string,
+    changes: { amountCents: number },
+  ): Promise<void> {
     await mutex.run(async () => {
-      const amount = validatePaymentAmount(changes.amount)
+      const amountCents = validatePaymentAmountCents(changes.amountCents)
       const payment = await db.payments.findOne(paymentId).exec()
       if (!payment) throw new PaymentNotFoundError()
       const customer = await db.customers.findOne(payment.customerId).exec()
       if (!customer) throw new CustomerNotFoundError()
 
-      const delta = amount - payment.amount
+      const deltaCents = amountCents - payment.amountCents
       await customer.incrementalModify((data) => {
-        data.balance += delta
+        data.balanceCents += deltaCents
         return data
       })
       try {
         await payment.incrementalModify((data) => {
-          data.amount = amount
+          data.amountCents = amountCents
           return data
         })
       } catch (error) {
         await customer
           .incrementalModify((data) => {
-            data.balance -= delta
+            data.balanceCents -= deltaCents
             return data
           })
           .catch(() => undefined)
@@ -435,7 +434,7 @@ export function createSalesbookService(db: SalesbookDatabase) {
       try {
         if (customer) {
           await customer.incrementalModify((data) => {
-            data.balance -= payment.amount
+            data.balanceCents -= payment.amountCents
             return data
           })
           balanceDebited = true
@@ -445,7 +444,7 @@ export function createSalesbookService(db: SalesbookDatabase) {
         if (balanceDebited && customer) {
           await customer
             .incrementalModify((data) => {
-              data.balance += payment.amount
+              data.balanceCents += payment.amountCents
               return data
             })
             .catch(() => undefined)
@@ -457,32 +456,32 @@ export function createSalesbookService(db: SalesbookDatabase) {
 
   async function createBalanceAdjustment(input: {
     customerId: string
-    newBalance: number
+    newBalanceCents: number
   }): Promise<AdjustmentDocType> {
     return mutex.run(async () => {
-      const newBalance = roundCents(validateBalance(input.newBalance))
+      const newBalanceCents = validateBalanceCents(input.newBalanceCents)
       const customer = await db.customers.findOne(input.customerId).exec()
       if (!customer) throw new CustomerNotFoundError()
 
-      const delta = roundCents(newBalance - customer.balance)
-      if (delta === 0) throw new NoBalanceChangeError()
+      const deltaCents = newBalanceCents - customer.balanceCents
+      if (deltaCents === 0) throw new NoBalanceChangeError()
 
       await customer.incrementalModify((data) => {
-        data.balance += delta
+        data.balanceCents += deltaCents
         return data
       })
       try {
         const adjustment = await db.adjustments.insert({
           id: newId(),
           customerId: customer.id,
-          amount: delta,
+          amountCents: deltaCents,
           createdAt: new Date().toISOString(),
         })
         return adjustment.toMutableJSON()
       } catch (error) {
         await customer
           .incrementalModify((data) => {
-            data.balance -= delta
+            data.balanceCents -= deltaCents
             return data
           })
           .catch(() => undefined)
@@ -493,37 +492,37 @@ export function createSalesbookService(db: SalesbookDatabase) {
 
   async function updateAdjustment(
     adjustmentId: string,
-    changes: { newBalance: number },
+    changes: { newBalanceCents: number },
   ): Promise<void> {
     await mutex.run(async () => {
-      const newBalance = roundCents(validateBalance(changes.newBalance))
+      const newBalanceCents = validateBalanceCents(changes.newBalanceCents)
       const adjustment = await db.adjustments.findOne(adjustmentId).exec()
       if (!adjustment) throw new AdjustmentNotFoundError()
       const customer = await db.customers.findOne(adjustment.customerId).exec()
       if (!customer) throw new CustomerNotFoundError()
 
-      const balanceWithoutAdjustment = customer.balance - adjustment.amount
-      const newDelta = roundCents(newBalance - balanceWithoutAdjustment)
-      if (newDelta === adjustment.amount) {
+      const balanceWithoutAdjustmentCents = customer.balanceCents - adjustment.amountCents
+      const newDeltaCents = newBalanceCents - balanceWithoutAdjustmentCents
+      if (newDeltaCents === adjustment.amountCents) {
         throw new NoBalanceChangeError(
           'O novo saldo não altera este ajuste. Para removê-lo, exclua o ajuste.',
         )
       }
-      const balanceDelta = roundCents(newDelta - adjustment.amount)
+      const balanceDeltaCents = newDeltaCents - adjustment.amountCents
 
       await customer.incrementalModify((data) => {
-        data.balance += balanceDelta
+        data.balanceCents += balanceDeltaCents
         return data
       })
       try {
         await adjustment.incrementalModify((data) => {
-          data.amount = newDelta
+          data.amountCents = newDeltaCents
           return data
         })
       } catch (error) {
         await customer
           .incrementalModify((data) => {
-            data.balance -= balanceDelta
+            data.balanceCents -= balanceDeltaCents
             return data
           })
           .catch(() => undefined)
@@ -542,7 +541,7 @@ export function createSalesbookService(db: SalesbookDatabase) {
       try {
         if (customer) {
           await customer.incrementalModify((data) => {
-            data.balance -= adjustment.amount
+            data.balanceCents -= adjustment.amountCents
             return data
           })
           balanceRestored = true
@@ -552,7 +551,7 @@ export function createSalesbookService(db: SalesbookDatabase) {
         if (balanceRestored && customer) {
           await customer
             .incrementalModify((data) => {
-              data.balance += adjustment.amount
+              data.balanceCents += adjustment.amountCents
               return data
             })
             .catch(() => undefined)

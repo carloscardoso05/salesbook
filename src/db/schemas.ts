@@ -12,16 +12,16 @@ const idProperty = { type: 'string', maxLength: 100 } as const
 
 export const customerSchema: RxJsonSchema<CustomerDocType> = {
   title: 'customer',
-  version: 0,
+  version: 1,
   primaryKey: 'id',
   type: 'object',
   properties: {
     id: idProperty,
     name: { type: 'string', maxLength: 200 },
     nameNormalized: { type: 'string', maxLength: 200 },
-    balance: { type: 'number' },
+    balanceCents: { type: 'integer' },
   },
-  required: ['id', 'name', 'nameNormalized', 'balance'],
+  required: ['id', 'name', 'nameNormalized', 'balanceCents'],
   indexes: ['nameNormalized'],
 }
 
@@ -56,45 +56,45 @@ export const orderSchema: RxJsonSchema<OrderDocType> = {
 
 export const orderItemSchema: RxJsonSchema<OrderItemDocType> = {
   title: 'orderitem',
-  version: 0,
+  version: 1,
   primaryKey: 'id',
   type: 'object',
   properties: {
     id: idProperty,
     orderId: { type: 'string', maxLength: 100 },
     productId: { type: 'string', maxLength: 100 },
-    price: { type: 'number', minimum: 0 },
+    priceCents: { type: 'integer', minimum: 0 },
   },
-  required: ['id', 'orderId', 'productId', 'price'],
+  required: ['id', 'orderId', 'productId', 'priceCents'],
   indexes: ['orderId', 'productId'],
 }
 
 export const paymentSchema: RxJsonSchema<PaymentDocType> = {
   title: 'payment',
-  version: 0,
+  version: 1,
   primaryKey: 'id',
   type: 'object',
   properties: {
     id: idProperty,
     customerId: { type: 'string', maxLength: 100 },
-    amount: { type: 'number', exclusiveMinimum: 0 },
+    amountCents: { type: 'integer', exclusiveMinimum: 0 },
     createdAt: { type: 'string', maxLength: 32, format: 'date-time' },
   },
-  required: ['id', 'customerId', 'amount', 'createdAt'],
+  required: ['id', 'customerId', 'amountCents', 'createdAt'],
   indexes: ['customerId', 'createdAt'],
 }
 
 export const adjustmentSchema: RxJsonSchema<AdjustmentDocType> = {
   title: 'adjustment',
-  version: 0,
+  version: 1,
   primaryKey: 'id',
   type: 'object',
   properties: {
     id: idProperty,
     customerId: { type: 'string', maxLength: 100 },
-    amount: { type: 'number' },
+    amountCents: { type: 'integer' },
     createdAt: { type: 'string', maxLength: 32, format: 'date-time' },
   },
-  required: ['id', 'customerId', 'amount', 'createdAt'],
+  required: ['id', 'customerId', 'amountCents', 'createdAt'],
   indexes: ['customerId', 'createdAt'],
 }

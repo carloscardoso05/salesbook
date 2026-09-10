@@ -18,14 +18,21 @@ import type {
   PaymentDocType,
 } from '../db/types'
 import { formatBRL, formatDateTime, formatSignedBRL } from '../utils/format'
+import { fromCents, toCents } from '../utils/money'
 
 type FinancialEntry =
-  | { kind: 'payment'; id: string; createdAt: string; amount: number; payment: PaymentDocType }
+  | {
+      kind: 'payment'
+      id: string
+      createdAt: string
+      amountCents: number
+      payment: PaymentDocType
+    }
   | {
       kind: 'adjustment'
       id: string
       createdAt: string
-      amount: number
+      amountCents: number
       adjustment: AdjustmentDocType
     }
 
@@ -75,14 +82,14 @@ const financialEntries = computed<FinancialEntry[]>(() => {
       kind: 'payment' as const,
       id: payment.id,
       createdAt: payment.createdAt,
-      amount: payment.amount,
+      amountCents: payment.amountCents,
       payment,
     })),
     ...adjustments.value.map((adjustment) => ({
       kind: 'adjustment' as const,
       id: adjustment.id,
       createdAt: adjustment.createdAt,
-      amount: adjustment.amount,
+      amountCents: adjustment.amountCents,
       adjustment,
     })),
   ]
@@ -94,7 +101,7 @@ const allItems = useRxQuery<OrderItemDocType>(() => db.orderitems.find())
 const orderTotals = computed(() => {
   const totals = new Map<string, number>()
   for (const item of allItems.value) {
-    totals.set(item.orderId, (totals.get(item.orderId) ?? 0) + item.price)
+    totals.set(item.orderId, (totals.get(item.orderId) ?? 0) + item.priceCents)
   }
   return totals
 })
@@ -114,11 +121,11 @@ const isRemoveOpen = ref(false)
 const removing = ref(false)
 
 const isAdjustOpen = ref(false)
-const adjustBalance = ref<number | null>(null)
+const adjustBalanceCents = ref<number | null>(null)
 const savingAdjust = ref(false)
 
 const editingAdjustment = ref<AdjustmentDocType | null>(null)
-const editAdjustBalance = ref<number | null>(null)
+const editAdjustBalanceCents = ref<number | null>(null)
 const savingEditAdjust = ref(false)
 
 const adjustmentToRemove = ref<AdjustmentDocType | null>(null)
@@ -131,15 +138,16 @@ const savingEditPayment = ref(false)
 const paymentToRemove = ref<PaymentDocType | null>(null)
 const removingPayment = ref(false)
 
-const adjustDelta = computed(() => {
-  if (!customer.value || adjustBalance.value === null) return 0
-  return Math.round((Number(adjustBalance.value) - customer.value.balance) * 100) / 100
+const adjustDeltaCents = computed(() => {
+  if (!customer.value || adjustBalanceCents.value === null) return 0
+  return Number(adjustBalanceCents.value) - customer.value.balanceCents
 })
 
-const editAdjustDelta = computed(() => {
-  if (!customer.value || !editingAdjustment.value || editAdjustBalance.value === null) return 0
-  const balanceWithoutAdjustment = customer.value.balance - editingAdjustment.value.amount
-  return Math.round((Number(editAdjustBalance.value) - balanceWithoutAdjustment) * 100) / 100
+const editAdjustDeltaCents = computed(() => {
+  if (!customer.value || !editingAdjustment.value || editAdjustBalanceCents.value === null) return 0
+  const balanceWithoutAdjustmentCents =
+    customer.value.balanceCents - editingAdjustment.value.amountCents
+  return Number(editAdjustBalanceCents.value) - balanceWithoutAdjustmentCents
 })
 
 function openEdit(): void {
@@ -178,7 +186,7 @@ async function removeCustomer(): Promise<void> {
 
 function openAdjust(): void {
   if (!customer.value) return
-  adjustBalance.value = customer.value.balance
+  adjustBalanceCents.value = customer.value.balanceCents
   isAdjustOpen.value = true
 }
 
@@ -188,7 +196,7 @@ async function saveAdjust(): Promise<void> {
   try {
     await service.createBalanceAdjustment({
       customerId: customer.value.id,
-      newBalance: Number(adjustBalance.value),
+      newBalanceCents: Number(adjustBalanceCents.value),
     })
     toast.success('Saldo ajustado.')
     isAdjustOpen.value = false
@@ -202,7 +210,7 @@ async function saveAdjust(): Promise<void> {
 function openEditAdjustment(adjustment: AdjustmentDocType): void {
   if (!customer.value) return
   editingAdjustment.value = adjustment
-  editAdjustBalance.value = customer.value.balance
+  editAdjustBalanceCents.value = customer.value.balanceCents
 }
 
 async function saveEditAdjustment(): Promise<void> {
@@ -210,7 +218,7 @@ async function saveEditAdjustment(): Promise<void> {
   savingEditAdjust.value = true
   try {
     await service.updateAdjustment(editingAdjustment.value.id, {
-      newBalance: Number(editAdjustBalance.value),
+      newBalanceCents: Number(editAdjustBalanceCents.value),
     })
     toast.success('Ajuste atualizado.')
     editingAdjustment.value = null
@@ -237,7 +245,7 @@ async function confirmRemoveAdjustment(): Promise<void> {
 
 function openEditPayment(payment: PaymentDocType): void {
   editingPayment.value = payment
-  editPaymentAmount.value = payment.amount
+  editPaymentAmount.value = fromCents(payment.amountCents)
 }
 
 async function saveEditPayment(): Promise<void> {
@@ -245,7 +253,7 @@ async function saveEditPayment(): Promise<void> {
   savingEditPayment.value = true
   try {
     await service.updatePayment(editingPayment.value.id, {
-      amount: Number(editPaymentAmount.value),
+      amountCents: toCents(Number(editPaymentAmount.value)),
     })
     toast.success('Pagamento atualizado e saldo ajustado.')
     editingPayment.value = null
@@ -282,14 +290,14 @@ function requestRemoveEntry(entry: FinancialEntry): void {
 
 function adjustmentRemovalMessage(): string {
   if (!adjustmentToRemove.value || !customer.value) return ''
-  const after = customer.value.balance - adjustmentToRemove.value.amount
-  return `Excluir este ajuste de ${formatSignedBRL(adjustmentToRemove.value.amount)} altera o saldo do cliente de ${formatBRL(customer.value.balance)} para ${formatBRL(after)}. Deseja continuar?`
+  const afterCents = customer.value.balanceCents - adjustmentToRemove.value.amountCents
+  return `Excluir este ajuste de ${formatSignedBRL(adjustmentToRemove.value.amountCents)} altera o saldo do cliente de ${formatBRL(customer.value.balanceCents)} para ${formatBRL(afterCents)}. Deseja continuar?`
 }
 
 function paymentRemovalMessage(): string {
   if (!paymentToRemove.value || !customer.value) return ''
-  const after = customer.value.balance - paymentToRemove.value.amount
-  return `Excluir este pagamento de ${formatBRL(paymentToRemove.value.amount)} altera o saldo do cliente de ${formatBRL(customer.value.balance)} para ${formatBRL(after)}. Deseja continuar?`
+  const afterCents = customer.value.balanceCents - paymentToRemove.value.amountCents
+  return `Excluir este pagamento de ${formatBRL(paymentToRemove.value.amountCents)} altera o saldo do cliente de ${formatBRL(customer.value.balanceCents)} para ${formatBRL(afterCents)}. Deseja continuar?`
 }
 </script>
 
@@ -336,20 +344,20 @@ function paymentRemovalMessage(): string {
       <p
         class="mt-1 text-2xl font-bold"
         :class="
-          customer.balance < 0
+          customer.balanceCents < 0
             ? 'text-red-600'
-            : customer.balance > 0
+            : customer.balanceCents > 0
               ? 'text-emerald-600'
               : 'text-slate-900'
         "
       >
-        {{ formatBRL(customer.balance) }}
+        {{ formatBRL(customer.balanceCents) }}
       </p>
       <p class="mt-1 text-xs text-slate-500">
         {{
-          customer.balance < 0
+          customer.balanceCents < 0
             ? 'Cliente deve este valor.'
-            : customer.balance > 0
+            : customer.balanceCents > 0
               ? 'Cliente tem crédito.'
               : 'Sem pendências.'
         }}
@@ -405,7 +413,7 @@ function paymentRemovalMessage(): string {
               :class="
                 entry.kind === 'payment'
                   ? 'text-emerald-500'
-                  : entry.amount < 0
+                  : entry.amountCents < 0
                     ? 'text-red-400'
                     : 'text-emerald-500'
               "
@@ -419,10 +427,16 @@ function paymentRemovalMessage(): string {
             <span
               class="text-sm font-semibold"
               :class="
-                entry.kind === 'adjustment' && entry.amount < 0 ? 'text-red-600' : 'text-emerald-600'
+                entry.kind === 'adjustment' && entry.amountCents < 0
+                  ? 'text-red-600'
+                  : 'text-emerald-600'
               "
             >
-              {{ entry.kind === 'adjustment' ? formatSignedBRL(entry.amount) : formatBRL(entry.amount) }}
+              {{
+                entry.kind === 'adjustment'
+                  ? formatSignedBRL(entry.amountCents)
+                  : formatBRL(entry.amountCents)
+              }}
             </span>
             <button
               type="button"
@@ -483,17 +497,23 @@ function paymentRemovalMessage(): string {
     <form class="space-y-4" @submit.prevent="saveAdjust">
       <div>
         <label class="label" for="adjust-balance">Novo saldo (R$)</label>
-        <SignedMoneyInput id="adjust-balance" v-model="adjustBalance" required />
+        <SignedMoneyInput id="adjust-balance" v-model="adjustBalanceCents" required />
         <p class="mt-1.5 text-xs text-slate-500">
-          Saldo atual: {{ customer ? formatBRL(customer.balance) : '' }}
+          Saldo atual: {{ customer ? formatBRL(customer.balanceCents) : '' }}
           <span
             class="ml-1"
-            :class="adjustDelta === 0 ? '' : adjustDelta > 0 ? 'text-emerald-600' : 'text-red-600'"
+            :class="
+              adjustDeltaCents === 0
+                ? ''
+                : adjustDeltaCents > 0
+                  ? 'text-emerald-600'
+                  : 'text-red-600'
+            "
           >
             {{
-              adjustDelta === 0
+              adjustDeltaCents === 0
                 ? '· sem alteração'
-                : '· diferença ' + formatSignedBRL(adjustDelta)
+                : '· diferença ' + formatSignedBRL(adjustDeltaCents)
             }}
           </span>
         </p>
@@ -517,20 +537,24 @@ function paymentRemovalMessage(): string {
     <form class="space-y-4" @submit.prevent="saveEditAdjustment">
       <div>
         <label class="label" for="edit-adjust-balance">Novo saldo (R$)</label>
-        <SignedMoneyInput id="edit-adjust-balance" v-model="editAdjustBalance" required />
+        <SignedMoneyInput id="edit-adjust-balance" v-model="editAdjustBalanceCents" required />
         <p class="mt-1.5 text-xs text-slate-500">
           Ajuste atual:
-          {{ editingAdjustment ? formatSignedBRL(editingAdjustment.amount) : '' }}
+          {{ editingAdjustment ? formatSignedBRL(editingAdjustment.amountCents) : '' }}
           <span
             class="ml-1"
             :class="
-              editAdjustDelta === 0 ? '' : editAdjustDelta > 0 ? 'text-emerald-600' : 'text-red-600'
+              editAdjustDeltaCents === 0
+                ? ''
+                : editAdjustDeltaCents > 0
+                  ? 'text-emerald-600'
+                  : 'text-red-600'
             "
           >
             {{
-              editAdjustDelta === 0
+              editAdjustDeltaCents === 0
                 ? '· sem alteração'
-                : '· novo ajuste ' + formatSignedBRL(editAdjustDelta)
+                : '· novo ajuste ' + formatSignedBRL(editAdjustDeltaCents)
             }}
           </span>
         </p>
@@ -546,7 +570,11 @@ function paymentRemovalMessage(): string {
     </form>
   </ModalDialog>
 
-  <ModalDialog :open="editingPayment !== null" title="Editar pagamento" @close="editingPayment = null">
+  <ModalDialog
+    :open="editingPayment !== null"
+    title="Editar pagamento"
+    @close="editingPayment = null"
+  >
     <form class="space-y-4" @submit.prevent="saveEditPayment">
       <div>
         <label class="label" for="edit-payment-amount">Valor (R$)</label>

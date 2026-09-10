@@ -10,6 +10,7 @@ import { useRxQuery } from '../composables/useRxQuery'
 import { errorMessage, toast } from '../composables/useToast'
 import type { CustomerDocType, OrderDocType, OrderItemDocType, ProductDocType } from '../db/types'
 import { formatBRL, formatDateTime } from '../utils/format'
+import { toCents } from '../utils/money'
 
 type ItemGroup = {
   productId: string
@@ -63,7 +64,7 @@ const groups = computed<ItemGroup[]>(() => {
     .map(([productId, groupItems]) => ({
       productId,
       name: productNames.value.get(productId) ?? 'Produto removido',
-      items: [...groupItems].sort((a, b) => a.price - b.price),
+      items: [...groupItems].sort((a, b) => a.priceCents - b.priceCents),
     }))
     .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
 })
@@ -82,10 +83,10 @@ function isExpanded(productId: string): boolean {
 }
 
 function groupTotal(group: ItemGroup): number {
-  return group.items.reduce((sum, item) => sum + item.price, 0)
+  return group.items.reduce((sum, item) => sum + item.priceCents, 0)
 }
 
-const total = computed(() => items.value.reduce((sum, item) => sum + item.price, 0))
+const total = computed(() => items.value.reduce((sum, item) => sum + item.priceCents, 0))
 
 const selectedProductId = ref('')
 const quantity = ref(1)
@@ -121,7 +122,7 @@ async function addItem(): Promise<void> {
     await service.addOrderItem({
       orderId: orderId.value,
       productId: selectedProductId.value,
-      price: price.value ?? Number.NaN,
+      priceCents: toCents(Number(price.value)),
       quantity: quantity.value,
     })
     toast.success('Itens adicionados.')
@@ -256,7 +257,7 @@ function productName(productId: string): string {
                 class="flex items-center gap-3 py-2 pl-9 pr-2"
               >
                 <span class="flex-1 text-xs text-slate-500">1 unidade</span>
-                <span class="text-sm font-semibold text-slate-900">{{ formatBRL(item.price) }}</span>
+                <span class="text-sm font-semibold text-slate-900">{{ formatBRL(item.priceCents) }}</span>
                 <button
                   type="button"
                   class="btn btn-ghost btn-icon text-slate-400 hover:text-red-600"
@@ -350,7 +351,7 @@ function productName(productId: string): string {
   <ConfirmDialog
     :open="itemToRemove !== null"
     title="Remover unidade"
-    :message="`Remover ${itemToRemove ? productName(itemToRemove.productId) : ''} devolve 1 unidade ao estoque e estorna ${itemToRemove ? formatBRL(itemToRemove.price) : ''} do saldo do cliente.`"
+    :message="`Remover ${itemToRemove ? productName(itemToRemove.productId) : ''} devolve 1 unidade ao estoque e estorna ${itemToRemove ? formatBRL(itemToRemove.priceCents) : ''} do saldo do cliente.`"
     confirm-label="Remover"
     danger
     :busy="removingItem"

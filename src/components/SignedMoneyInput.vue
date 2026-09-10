@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { formatBRL } from '../utils/format'
+import { formatAmountInput, toCents } from '../utils/money'
 
 const props = defineProps<{
   modelValue: number | null
@@ -13,35 +14,36 @@ const emit = defineEmits<{ 'update:modelValue': [value: number | null] }>()
 const negative = ref(false)
 const text = ref('')
 
-function parseText(raw: string): number | null {
+function parseReais(raw: string): number | null {
   const normalized = raw.trim().replace(/\s/g, '').replace(',', '.')
   if (normalized === '' || normalized === '.' || normalized === '-') return null
   const parsed = Number(normalized)
   return Number.isFinite(parsed) ? parsed : null
 }
 
+function currentCents(): number | null {
+  const parsed = parseReais(text.value)
+  if (parsed === null) return null
+  const cents = toCents(parsed)
+  return negative.value ? -cents : cents
+}
+
 watch(
   () => props.modelValue,
   (value) => {
-    const parsed = parseText(text.value)
-    const current = parsed === null ? null : negative.value ? -parsed : parsed
-    if (value === current) return
+    if (value === currentCents()) return
     if (value === null || value === undefined || !Number.isFinite(value)) {
       text.value = ''
       negative.value = false
       return
     }
     negative.value = value < 0
-    text.value = String(Math.abs(value))
+    text.value = formatAmountInput(value)
   },
   { immediate: true },
 )
 
-const signedValue = computed(() => {
-  const parsed = parseText(text.value)
-  if (parsed === null) return null
-  return negative.value ? -parsed : parsed
-})
+const signedValue = computed(() => currentCents())
 
 function onInput(event: Event): void {
   const input = event.target as HTMLInputElement

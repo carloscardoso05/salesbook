@@ -10,10 +10,11 @@
 ## Arquitetura
 - PWA offline-first: Vue 3 + Vite + RxDB 17 sobre IndexedDB (`getRxStorageDexie`) + Tailwind 4.
 - Coleções em `src/db/schemas.ts` (`customers`, `products`, `orders`, `orderitems`, `payments`, `adjustments`). `createdAt` é ISO string com `format: 'date-time'`; IDs vêm de `crypto.randomUUID()`; `nameNormalized` é indexado (trim + espaços colapsados + lowercase pt-BR).
+- Dinheiro é armazenado em **centavos inteiros** (`balanceCents`, `priceCents`, `amountCents`); conversão em `src/utils/money.ts` (`toCents`/`fromCents`) e `formatBRL`/`formatSignedBRL` recebem centavos. Nunca faça aritmética de dinheiro com floats.
 - `src/db/database.ts`: `getDatabase()` singleton do app; `createSalesbookDatabase(name)` para testes. Dev-mode e validação AJV só quando `import.meta.env.DEV`.
 - `src/services/salesbook.ts` é a única porta de escrita com efeito colateral: views nunca chamam `insert/patch/remove` direto. Um mutex serializa operações; como o RxDB grátis não tem transação multi-coleção, cada operação valida antes, usa `incrementalModify` e compensa (rollback manual) em erro.
 - Regras: adicionar `OrderItem` debita 1 do estoque (nunca negativo) e o preço do `balance`; remover estorna ambos; excluir `Order` reusa a exclusão de cada item (cascade com estorno) antes de remover a Order; pagamento credita `balance` e exige `amount > 0`. 1 OrderItem = 1 unidade física.
-- Ajustes de saldo gravam o delta em `adjustments` e aplicam no `balance`; editar um ajuste usa o saldo-alvo sobre o saldo sem esse ajuste; saldo inicial do cadastro vira um Ajuste; excluir cliente é bloqueado por pedidos, pagamentos ou ajustes.
+- Ajustes de saldo gravam o delta em `adjustments` e aplicam no `balanceCents`; editar um ajuste usa o saldo-alvo sobre o saldo sem esse ajuste; saldo inicial do cadastro vira um Ajuste; excluir cliente é bloqueado por pedidos, pagamentos ou ajustes.
 - Nomes de cliente/produto são únicos case-insensitive, garantido no service (`DuplicateNameError`), não por índice único do banco.
 - `src/composables/useRxQuery.ts` transforma `RxQuery.$` em `Ref` de JSON. `useDatabase`/`useSalesbook` usam provide/inject; o provider fica em `src/main.ts`, que só monta o app após abrir o banco.
 
@@ -21,7 +22,7 @@
 - UI em pt-BR (entidades/schema em inglês); moeda e datas via `Intl` em `src/utils/format.ts`.
 - Tailwind v4 sem `tailwind.config.js`: tema em `src/style.css` (`@theme`, `@layer components` com `.btn`, `.card`, `.input`).
 - `tsconfig` usa `erasableSyntaxOnly`: sem enums, parameter properties ou namespaces.
-- Alterar schema RxDB já persistido exige bump de `version` + migration; em dev, apague o banco ou troque o nome.
+- Alterar schema RxDB já persistido exige bump de `version` + migration; o `RxDBMigrationSchemaPlugin` é registrado em `src/db/database.ts` e as conversões ficam em `src/db/migrations.ts` (v1 converte reais antigos para centavos). Em dev, apague o banco ou troque o nome.
 
 ## Testes
 - Vitest + `fake-indexeddb/auto` (primeira linha do spec) porque Node não tem IndexedDB.

@@ -35,7 +35,7 @@ const orderSummaries = computed(() => {
   const total = new Map<string, number>()
   for (const item of items.value) {
     count.set(item.orderId, (count.get(item.orderId) ?? 0) + 1)
-    total.set(item.orderId, (total.get(item.orderId) ?? 0) + item.price)
+    total.set(item.orderId, (total.get(item.orderId) ?? 0) + item.priceCents)
   }
   return { count, total }
 })

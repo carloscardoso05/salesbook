@@ -4,7 +4,7 @@ export type CustomerDocType = {
   id: string
   name: string
   nameNormalized: string
-  balance: number
+  balanceCents: number
 }
 
 export type ProductDocType = {
@@ -24,20 +24,20 @@ export type OrderItemDocType = {
   id: string
   orderId: string
   productId: string
-  price: number
+  priceCents: number
 }
 
 export type PaymentDocType = {
   id: string
   customerId: string
-  amount: number
+  amountCents: number
   createdAt: string
 }
 
 export type AdjustmentDocType = {
   id: string
   customerId: string
-  amount: number
+  amountCents: number
   createdAt: string
 }
 

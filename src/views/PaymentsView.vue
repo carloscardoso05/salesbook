@@ -11,6 +11,7 @@ import { useRxQuery } from '../composables/useRxQuery'
 import { errorMessage, toast } from '../composables/useToast'
 import type { CustomerDocType, PaymentDocType } from '../db/types'
 import { formatBRL, formatDateTime } from '../utils/format'
+import { fromCents, toCents } from '../utils/money'
 
 const route = useRoute()
 const db = useDatabase()
@@ -60,7 +61,7 @@ async function submit(): Promise<void> {
   try {
     await service.addPayment({
       customerId: selectedCustomerId.value,
-      amount: amount.value ?? Number.NaN,
+      amountCents: toCents(Number(amount.value)),
     })
     toast.success('Pagamento registrado.')
     amount.value = null
@@ -73,14 +74,16 @@ async function submit(): Promise<void> {
 
 function openEdit(payment: PaymentDocType): void {
   editing.value = payment
-  editAmount.value = payment.amount
+  editAmount.value = fromCents(payment.amountCents)
 }
 
 async function saveEdit(): Promise<void> {
   if (!editing.value) return
   savingEdit.value = true
   try {
-    await service.updatePayment(editing.value.id, { amount: editAmount.value ?? Number.NaN })
+    await service.updatePayment(editing.value.id, {
+      amountCents: toCents(Number(editAmount.value)),
+    })
     toast.success('Pagamento atualizado e saldo ajustado.')
     editing.value = null
   } catch (error) {
@@ -173,7 +176,7 @@ function customerName(customerId: string): string {
             <p class="text-xs text-slate-500">{{ formatDateTime(payment.createdAt) }}</p>
           </div>
           <span class="text-sm font-semibold text-emerald-600">
-            {{ formatBRL(payment.amount) }}
+            {{ formatBRL(payment.amountCents) }}
           </span>
           <button
             type="button"
@@ -225,7 +228,7 @@ function customerName(customerId: string): string {
   <ConfirmDialog
     :open="paymentToRemove !== null"
     title="Excluir pagamento"
-    :message="`Excluir este pagamento de ${paymentToRemove ? formatBRL(paymentToRemove.amount) : ''} debita o valor do saldo de ${paymentToRemove ? customerName(paymentToRemove.customerId) : 'cliente'}. Deseja continuar?`"
+    :message="`Excluir este pagamento de ${paymentToRemove ? formatBRL(paymentToRemove.amountCents) : ''} debita o valor do saldo de ${paymentToRemove ? customerName(paymentToRemove.customerId) : 'cliente'}. Deseja continuar?`"
     confirm-label="Excluir"
     danger
     :busy="removing"
