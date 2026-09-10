@@ -3,6 +3,7 @@ import { registerSW } from 'virtual:pwa-register'
 import App from './App.vue'
 import './style.css'
 import { databaseKey, salesbookKey } from './composables/useDatabase'
+import { markAppUpdating } from './composables/useAppUpdate'
 import { getDatabase } from './db/database'
 import { installRipple } from './directives/ripple'
 import { router } from './router'
@@ -18,7 +19,13 @@ async function bootstrap(): Promise<void> {
   app.use(router)
   app.mount('#app')
 
-  registerSW({ immediate: true })
+  registerSW({
+    immediate: true,
+    onNeedReload: () => {
+      markAppUpdating()
+      window.setTimeout(() => window.location.reload(), 1500)
+    },
+  })
 }
 
 void bootstrap()

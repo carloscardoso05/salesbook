@@ -31,4 +31,5 @@
 - Repo: `carloscardoso05/salesbook-local` · Site: https://carloscardoso05.github.io/salesbook-local/
 - `.github/workflows/deploy.yml` publica no GitHub Pages a cada push na `main`: testes, build com `BASE_PATH=/<repo>/`, `cp dist/index.html dist/404.html` (fallback de rotas SPA) e upload do artefato. Pages usa source "GitHub Actions".
 - O `base` do Vite vem de `process.env.BASE_PATH` (default `/`); não hardcode o subpath.
+- Atualização do PWA: `registerType: 'autoUpdate'`; `onNeedReload` em `src/main.ts` exibe `UpdateOverlay` e recarrega a página após 1,5s quando um SW novo assume o controle.
 - O remote é SSH. Push via HTTPS de arquivos em `.github/workflows/` falha porque o token do `gh` não tem o scope `workflow`.

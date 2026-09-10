@@ -2,6 +2,7 @@
 import { RouterView } from 'vue-router'
 import AppNav from './components/AppNav.vue'
 import ToastHost from './components/ToastHost.vue'
+import UpdateOverlay from './components/UpdateOverlay.vue'
 </script>
 
 <template>
@@ -11,5 +12,6 @@ import ToastHost from './components/ToastHost.vue'
       <RouterView />
     </main>
     <ToastHost />
+    <UpdateOverlay />
   </div>
 </template>
