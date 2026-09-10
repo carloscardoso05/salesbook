@@ -8,8 +8,10 @@ import { getDatabase } from './db/database'
 import { installRipple } from './directives/ripple'
 import { router } from './router'
 import { createSalesbookService } from './services/salesbook'
+import { cleanupLegacyPwa } from './utils/pwaCleanup'
 
 async function bootstrap(): Promise<void> {
+  void cleanupLegacyPwa()
   const db = await getDatabase()
 
   const app = createApp(App)
