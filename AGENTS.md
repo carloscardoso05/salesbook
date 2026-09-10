@@ -30,7 +30,7 @@
 - `tests/salesbook.spec.ts` cobre as regras de negócio; `tsconfig.app.json` inclui `tests/`, então `vue-tsc` valida os testes também.
 
 ## Deploy
-- Repo: `carloscardoso05/salesbook-local` · Site: https://carloscardoso05.github.io/salesbook-local/
+- Repo: `carloscardoso05/salesbook` · Site: https://carloscardoso05.github.io/salesbook/
 - `.github/workflows/deploy.yml` publica no GitHub Pages a cada push na `main`: testes, build com `BASE_PATH=/<repo>/`, `cp dist/index.html dist/404.html` (fallback de rotas SPA) e upload do artefato. Pages usa source "GitHub Actions".
 - O `base` do Vite vem de `process.env.BASE_PATH` (default `/`); não hardcode o subpath.
 - Atualização do PWA: `registerType: 'autoUpdate'`; `onNeedReload` em `src/main.ts` exibe `UpdateOverlay` e recarrega a página após 1,5s quando um SW novo assume o controle.

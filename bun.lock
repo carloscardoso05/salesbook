@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "salesbook-local",
+      "name": "salesbook",
       "dependencies": {
         "rxdb": "^17.5.0",
         "rxjs": "^7.8.2",
