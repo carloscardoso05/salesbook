@@ -2,7 +2,6 @@
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import AppIcon from '../components/AppIcon.vue'
-import EmptyState from '../components/EmptyState.vue'
 import PageHeader from '../components/PageHeader.vue'
 import { useDatabase } from '../composables/useDatabase'
 import { useRxQuery } from '../composables/useRxQuery'
@@ -13,11 +12,10 @@ import type {
   PaymentDocType,
   ProductDocType,
 } from '../db/types'
-import { formatBRL, formatDateTime } from '../utils/format'
+import { formatBRL, formatDateTime, pluralize } from '../utils/format'
+import { isLowStock, stockBadgeClass } from '../utils/stock'
 
 const db = useDatabase()
-
-const LOW_STOCK_THRESHOLD = 5
 
 const customers = useRxQuery<CustomerDocType>(() => db.customers.find())
 const products = useRxQuery<ProductDocType>(() => db.products.find())
@@ -39,7 +37,7 @@ const totalSales = computed(() =>
 )
 const lowStockProducts = computed(() =>
   products.value
-    .filter((product) => product.stockQuantity <= LOW_STOCK_THRESHOLD)
+    .filter((product) => isLowStock(product.stockQuantity))
     .sort((a, b) => a.stockQuantity - b.stockQuantity),
 )
 const recentOrders = computed(() => orders.value.slice(0, 5))
@@ -100,12 +98,9 @@ function customerName(customerId: string): string {
           Ver todos
         </RouterLink>
       </div>
-      <EmptyState
-        v-if="recentOrders.length === 0"
-        icon="receipt"
-        title="Nenhum pedido ainda"
-        description="Crie um pedido para começar a registrar vendas."
-      />
+      <p v-if="recentOrders.length === 0" class="py-6 text-center text-sm text-slate-500">
+        Nenhum pedido ainda.
+      </p>
       <ul v-else class="divide-y divide-slate-100">
         <li v-for="order in recentOrders" :key="order.id">
           <RouterLink
@@ -118,7 +113,7 @@ function customerName(customerId: string): string {
               </p>
               <p class="text-xs text-slate-500">
                 {{ formatDateTime(order.createdAt) }} ·
-                {{ orderSummaries.itemCount.get(order.id) ?? 0 }} item(ns)
+                {{ pluralize(orderSummaries.itemCount.get(order.id) ?? 0, 'item', 'itens') }}
               </p>
             </div>
             <div class="flex items-center gap-2">
@@ -142,29 +137,23 @@ function customerName(customerId: string): string {
           Ver produtos
         </RouterLink>
       </div>
-      <EmptyState
-        v-if="lowStockProducts.length === 0"
-        icon="cube"
-        title="Estoque em dia"
-        description="Nenhum produto com estoque baixo."
-      />
+      <p v-if="lowStockProducts.length === 0" class="py-6 text-center text-sm text-slate-500">
+        Nenhum produto com estoque baixo.
+      </p>
       <ul v-else class="divide-y divide-slate-100">
-        <li
-          v-for="product in lowStockProducts"
-          :key="product.id"
-          class="flex items-center justify-between gap-3 py-2.5"
-        >
-          <span class="truncate text-sm font-medium text-slate-800">{{ product.name }}</span>
-          <span
-            class="badge"
-            :class="
-              product.stockQuantity === 0
-                ? 'bg-red-100 text-red-700'
-                : 'bg-amber-100 text-amber-700'
-            "
+        <li v-for="product in lowStockProducts" :key="product.id">
+          <RouterLink
+            :to="{ path: '/products', query: { edit: product.id } }"
+            class="tap-row -mx-1 flex items-center justify-between gap-3 rounded-xl px-1 py-2.5"
           >
-            {{ product.stockQuantity }} un.
-          </span>
+            <span class="truncate text-sm font-medium text-slate-800">{{ product.name }}</span>
+            <div class="flex items-center gap-2">
+              <span class="badge" :class="stockBadgeClass(product.stockQuantity)">
+                {{ product.stockQuantity }} un.
+              </span>
+              <AppIcon name="chevronRight" class="h-4 w-4 shrink-0 text-slate-300" />
+            </div>
+          </RouterLink>
         </li>
       </ul>
     </section>

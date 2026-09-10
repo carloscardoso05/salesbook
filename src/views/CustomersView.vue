@@ -5,13 +5,13 @@ import AppIcon from '../components/AppIcon.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import EmptyState from '../components/EmptyState.vue'
 import ModalDialog from '../components/ModalDialog.vue'
+import MoneyInput from '../components/MoneyInput.vue'
 import PageHeader from '../components/PageHeader.vue'
-import SignedMoneyInput from '../components/SignedMoneyInput.vue'
 import { useDatabase, useSalesbook } from '../composables/useDatabase'
 import { useRxQuery } from '../composables/useRxQuery'
 import { errorMessage, toast } from '../composables/useToast'
 import type { CustomerDocType } from '../db/types'
-import { formatBRL } from '../utils/format'
+import { formatBRL, pluralize } from '../utils/format'
 
 const db = useDatabase()
 const service = useSalesbook()
@@ -62,7 +62,7 @@ async function confirmRemove(): Promise<void> {
 </script>
 
 <template>
-  <PageHeader title="Clientes" :subtitle="`${customers.length} cadastrado(s)`">
+  <PageHeader title="Clientes" :subtitle="pluralize(customers.length, 'cadastrado', 'cadastrados')">
     <template #actions>
       <button type="button" class="btn btn-primary" @click="openForm">
         <AppIcon name="plus" class="h-4 w-4" />
@@ -132,7 +132,7 @@ async function confirmRemove(): Promise<void> {
       </div>
       <div>
         <label class="label" for="customer-initial-balance">Saldo inicial (R$)</label>
-        <SignedMoneyInput id="customer-initial-balance" v-model="initialBalance" />
+        <MoneyInput id="customer-initial-balance" v-model="initialBalance" />
         <p class="mt-1.5 text-xs text-slate-500">
           O valor será registrado como um ajuste no histórico.
         </p>

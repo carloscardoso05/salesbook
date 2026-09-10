@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import AppIcon from '../components/AppIcon.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import EmptyState from '../components/EmptyState.vue'
@@ -9,7 +10,11 @@ import { useDatabase, useSalesbook } from '../composables/useDatabase'
 import { useRxQuery } from '../composables/useRxQuery'
 import { errorMessage, toast } from '../composables/useToast'
 import type { ProductDocType } from '../db/types'
+import { pluralize } from '../utils/format'
+import { stockBadgeClass } from '../utils/stock'
 
+const route = useRoute()
+const router = useRouter()
 const db = useDatabase()
 const service = useSalesbook()
 
@@ -38,6 +43,17 @@ function openEdit(product: ProductDocType): void {
   stock.value = product.stockQuantity
   isFormOpen.value = true
 }
+
+function openEditFromQuery(): void {
+  const editId = route.query.edit
+  if (typeof editId !== 'string') return
+  const product = products.value.find((item) => item.id === editId)
+  if (!product) return
+  openEdit(product)
+  void router.replace({ query: {} })
+}
+
+watch([products, () => route.query.edit], openEditFromQuery, { immediate: true })
 
 async function submit(): Promise<void> {
   saving.value = true
@@ -76,7 +92,7 @@ async function confirmRemove(): Promise<void> {
 </script>
 
 <template>
-  <PageHeader title="Produtos" :subtitle="`${products.length} cadastrado(s)`">
+  <PageHeader title="Produtos" :subtitle="pluralize(products.length, 'cadastrado', 'cadastrados')">
     <template #actions>
       <button type="button" class="btn btn-primary" @click="openCreate">
         <AppIcon name="plus" class="h-4 w-4" />
@@ -95,30 +111,20 @@ async function confirmRemove(): Promise<void> {
   </EmptyState>
 
   <ul v-else class="space-y-2.5">
-    <li v-for="product in products" :key="product.id" class="card card-pad flex items-center gap-3">
-      <div class="min-w-0 flex-1">
-        <p class="truncate text-sm font-semibold text-slate-900">{{ product.name }}</p>
-        <p class="mt-0.5 text-xs text-slate-500">Estoque</p>
-      </div>
-      <span
-        class="badge"
-        :class="
-          product.stockQuantity === 0
-            ? 'bg-red-100 text-red-700'
-            : product.stockQuantity <= 5
-              ? 'bg-amber-100 text-amber-700'
-              : 'bg-slate-100 text-slate-600'
-        "
-      >
-        {{ product.stockQuantity }} un.
-      </span>
+    <li v-for="product in products" :key="product.id" class="card card-pad flex items-center gap-1">
       <button
         type="button"
-        class="btn btn-ghost btn-icon text-slate-400 hover:text-indigo-600"
-        aria-label="Editar produto"
+        class="tap-row flex min-w-0 flex-1 items-center gap-3 rounded-xl py-1 text-left"
         @click="openEdit(product)"
       >
-        <AppIcon name="pencil" class="h-5 w-5" />
+        <div class="min-w-0 flex-1">
+          <p class="truncate text-sm font-semibold text-slate-900">{{ product.name }}</p>
+          <p class="mt-0.5 text-xs text-slate-500">Estoque</p>
+        </div>
+        <span class="badge" :class="stockBadgeClass(product.stockQuantity)">
+          {{ product.stockQuantity }} un.
+        </span>
+        <AppIcon name="chevronRight" class="h-4 w-4 shrink-0 text-slate-300" />
       </button>
       <button
         type="button"

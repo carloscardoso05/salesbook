@@ -4,13 +4,13 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import AppIcon from '../components/AppIcon.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import EmptyState from '../components/EmptyState.vue'
+import MoneyInput from '../components/MoneyInput.vue'
 import PageHeader from '../components/PageHeader.vue'
 import { useDatabase, useSalesbook } from '../composables/useDatabase'
 import { useRxQuery } from '../composables/useRxQuery'
 import { errorMessage, toast } from '../composables/useToast'
 import type { CustomerDocType, OrderDocType, OrderItemDocType, ProductDocType } from '../db/types'
-import { formatBRL, formatDateTime } from '../utils/format'
-import { toCents } from '../utils/money'
+import { formatBRL, formatDateTime, pluralize } from '../utils/format'
 
 type ItemGroup = {
   productId: string
@@ -90,7 +90,7 @@ const total = computed(() => items.value.reduce((sum, item) => sum + item.priceC
 
 const selectedProductId = ref('')
 const quantity = ref(1)
-const price = ref<number | null>(null)
+const priceCents = ref<number | null>(null)
 const adding = ref(false)
 
 const selectedProduct = computed(
@@ -122,11 +122,11 @@ async function addItem(): Promise<void> {
     await service.addOrderItem({
       orderId: orderId.value,
       productId: selectedProductId.value,
-      priceCents: toCents(Number(price.value)),
+      priceCents: priceCents.value ?? 0,
       quantity: quantity.value,
     })
     toast.success('Itens adicionados.')
-    price.value = null
+    priceCents.value = null
     quantity.value = 1
   } catch (error) {
     toast.error(errorMessage(error))
@@ -218,57 +218,77 @@ function productName(productId: string): string {
           description="Adicione produtos a este pedido."
         />
         <ul v-else class="space-y-2">
-          <li
-            v-for="group in groups"
-            :key="group.productId"
-            class="overflow-hidden rounded-2xl border border-slate-200"
-          >
-            <div class="flex items-center gap-1 pr-2">
-              <button
-                type="button"
-                class="tap-row flex min-w-0 flex-1 items-center gap-2 rounded-xl px-3 py-2.5 text-left"
-                @click="toggleGroup(group.productId)"
-              >
-                <AppIcon
-                  :name="isExpanded(group.productId) ? 'chevronDown' : 'chevronRight'"
-                  class="h-4 w-4 shrink-0 text-slate-400"
-                />
-                <span class="min-w-0 flex-1 truncate text-sm font-semibold text-slate-800">
-                  {{ group.name }}
-                </span>
-                <span class="badge bg-slate-100 text-slate-600">{{ group.items.length }} un.</span>
-              </button>
+          <template v-for="group in groups" :key="group.productId">
+            <li
+              v-if="group.items.length === 1"
+              class="flex items-center gap-2 rounded-2xl border border-slate-200 px-3 py-2.5"
+            >
+              <div class="min-w-0 flex-1">
+                <p class="truncate text-sm font-semibold text-slate-800">{{ group.name }}</p>
+                <p class="text-xs text-slate-500">1 unidade</p>
+              </div>
+              <span class="text-sm font-semibold text-slate-900">
+                {{ formatBRL(group.items[0]?.priceCents ?? 0) }}
+              </span>
               <button
                 type="button"
                 class="btn btn-ghost btn-icon text-slate-400 hover:text-red-600"
-                aria-label="Remover todas as unidades do produto"
-                @click="groupToRemove = group"
+                aria-label="Remover unidade"
+                @click="itemToRemove = group.items[0] ?? null"
               >
                 <AppIcon name="trash" class="h-5 w-5" />
               </button>
-            </div>
-            <ul
-              v-if="isExpanded(group.productId)"
-              class="divide-y divide-slate-100 border-t border-slate-100"
-            >
-              <li
-                v-for="item in group.items"
-                :key="item.id"
-                class="flex items-center gap-3 py-2 pl-9 pr-2"
-              >
-                <span class="flex-1 text-xs text-slate-500">1 unidade</span>
-                <span class="text-sm font-semibold text-slate-900">{{ formatBRL(item.priceCents) }}</span>
+            </li>
+            <li v-else class="overflow-hidden rounded-2xl border border-slate-200">
+              <div class="flex items-center gap-1 pr-2">
+                <button
+                  type="button"
+                  class="tap-row flex min-w-0 flex-1 items-center gap-2 rounded-xl px-3 py-2.5 text-left"
+                  @click="toggleGroup(group.productId)"
+                >
+                  <AppIcon
+                    :name="isExpanded(group.productId) ? 'chevronDown' : 'chevronRight'"
+                    class="h-4 w-4 shrink-0 text-slate-400"
+                  />
+                  <span class="min-w-0 flex-1 truncate text-sm font-semibold text-slate-800">
+                    {{ group.name }}
+                  </span>
+                  <span class="badge bg-slate-100 text-slate-600">{{ group.items.length }} un.</span>
+                </button>
                 <button
                   type="button"
                   class="btn btn-ghost btn-icon text-slate-400 hover:text-red-600"
-                  aria-label="Remover unidade"
-                  @click="itemToRemove = item"
+                  aria-label="Remover todas as unidades do produto"
+                  @click="groupToRemove = group"
                 >
                   <AppIcon name="trash" class="h-5 w-5" />
                 </button>
-              </li>
-            </ul>
-          </li>
+              </div>
+              <ul
+                v-if="isExpanded(group.productId)"
+                class="divide-y divide-slate-100 border-t border-slate-100"
+              >
+                <li
+                  v-for="item in group.items"
+                  :key="item.id"
+                  class="flex items-center gap-3 py-2 pl-9 pr-2"
+                >
+                  <span class="flex-1 text-xs text-slate-500">1 unidade</span>
+                  <span class="text-sm font-semibold text-slate-900">
+                    {{ formatBRL(item.priceCents) }}
+                  </span>
+                  <button
+                    type="button"
+                    class="btn btn-ghost btn-icon text-slate-400 hover:text-red-600"
+                    aria-label="Remover unidade"
+                    @click="itemToRemove = item"
+                  >
+                    <AppIcon name="trash" class="h-5 w-5" />
+                  </button>
+                </li>
+              </ul>
+            </li>
+          </template>
         </ul>
         <div class="mt-4 flex items-center justify-between border-t border-slate-200 pt-3">
           <span class="text-sm font-medium text-slate-600">Total</span>
@@ -308,20 +328,17 @@ function productName(productId: string): string {
             </div>
             <div>
               <label class="label" for="item-price">Preço (R$)</label>
-              <input
+              <MoneyInput
                 id="item-price"
-                v-model.number="price"
-                class="input"
-                type="number"
-                min="0"
-                step="0.01"
+                v-model="priceCents"
                 required
-                placeholder="0,00"
+                :allow-negative="false"
+                :show-preview="false"
               />
             </div>
           </div>
           <p v-if="selectedProduct" class="text-xs text-slate-500">
-            {{ maxQuantity }} unidade(s) disponível(is) em estoque.
+            {{ pluralize(maxQuantity, 'unidade disponível', 'unidades disponíveis') }} em estoque.
           </p>
           <button
             type="submit"
@@ -362,7 +379,7 @@ function productName(productId: string): string {
   <ConfirmDialog
     :open="groupToRemove !== null"
     title="Remover produto do pedido"
-    :message="`Remover ${groupToRemove?.items.length ?? 0} unidade(s) de ${groupToRemove?.name ?? ''} (${groupToRemove ? formatBRL(groupTotal(groupToRemove)) : ''}) devolve o estoque e estorna o valor no saldo do cliente.`"
+    :message="`Remover ${groupToRemove ? pluralize(groupToRemove.items.length, 'unidade', 'unidades') : ''} de ${groupToRemove?.name ?? ''} (${groupToRemove ? formatBRL(groupTotal(groupToRemove)) : ''}) devolve o estoque e estorna o valor no saldo do cliente.`"
     confirm-label="Remover tudo"
     danger
     :busy="removingGroup"
@@ -373,7 +390,7 @@ function productName(productId: string): string {
   <ConfirmDialog
     :open="isRemoveOpen"
     title="Excluir pedido"
-    :message="`Excluir este pedido remove ${items.length} item(ns), devolve o estoque e estorna o saldo do cliente. Deseja continuar?`"
+    :message="`Excluir este pedido remove ${pluralize(items.length, 'item', 'itens')}, devolve o estoque e estorna o saldo do cliente. Deseja continuar?`"
     confirm-label="Excluir pedido"
     danger
     :busy="removingOrder"

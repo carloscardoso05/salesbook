@@ -5,8 +5,8 @@ import AppIcon from '../components/AppIcon.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import EmptyState from '../components/EmptyState.vue'
 import ModalDialog from '../components/ModalDialog.vue'
+import MoneyInput from '../components/MoneyInput.vue'
 import PageHeader from '../components/PageHeader.vue'
-import SignedMoneyInput from '../components/SignedMoneyInput.vue'
 import { useDatabase, useSalesbook } from '../composables/useDatabase'
 import { useRxQuery } from '../composables/useRxQuery'
 import { errorMessage, toast } from '../composables/useToast'
@@ -17,8 +17,7 @@ import type {
   OrderItemDocType,
   PaymentDocType,
 } from '../db/types'
-import { formatBRL, formatDateTime, formatSignedBRL } from '../utils/format'
-import { fromCents, toCents } from '../utils/money'
+import { formatBRL, formatDateTime, formatSignedBRL, pluralize } from '../utils/format'
 
 type FinancialEntry =
   | {
@@ -131,8 +130,10 @@ const savingEditAdjust = ref(false)
 const adjustmentToRemove = ref<AdjustmentDocType | null>(null)
 const removingAdjust = ref(false)
 
+const creatingOrder = ref(false)
+
 const editingPayment = ref<PaymentDocType | null>(null)
-const editPaymentAmount = ref<number | null>(null)
+const editPaymentAmountCents = ref<number | null>(null)
 const savingEditPayment = ref(false)
 
 const paymentToRemove = ref<PaymentDocType | null>(null)
@@ -190,6 +191,20 @@ function openAdjust(): void {
   isAdjustOpen.value = true
 }
 
+async function createOrderForCustomer(): Promise<void> {
+  if (!customer.value) return
+  creatingOrder.value = true
+  try {
+    const order = await service.createOrder(customer.value.id)
+    toast.success('Pedido criado.')
+    await router.push(`/orders/${order.id}`)
+  } catch (error) {
+    toast.error(errorMessage(error))
+  } finally {
+    creatingOrder.value = false
+  }
+}
+
 async function saveAdjust(): Promise<void> {
   if (!customer.value) return
   savingAdjust.value = true
@@ -245,7 +260,7 @@ async function confirmRemoveAdjustment(): Promise<void> {
 
 function openEditPayment(payment: PaymentDocType): void {
   editingPayment.value = payment
-  editPaymentAmount.value = fromCents(payment.amountCents)
+  editPaymentAmountCents.value = payment.amountCents
 }
 
 async function saveEditPayment(): Promise<void> {
@@ -253,7 +268,7 @@ async function saveEditPayment(): Promise<void> {
   savingEditPayment.value = true
   try {
     await service.updatePayment(editingPayment.value.id, {
-      amountCents: toCents(Number(editPaymentAmount.value)),
+      amountCents: editPaymentAmountCents.value ?? 0,
     })
     toast.success('Pagamento atualizado e saldo ajustado.')
     editingPayment.value = null
@@ -317,9 +332,14 @@ function paymentRemovalMessage(): string {
           <AppIcon name="pencil" class="h-4 w-4" />
           Editar
         </button>
-        <button type="button" class="btn btn-secondary" @click="openAdjust">
-          <AppIcon name="adjustments" class="h-4 w-4" />
-          Ajustar saldo
+        <button
+          type="button"
+          class="btn btn-secondary"
+          :disabled="creatingOrder"
+          @click="createOrderForCustomer"
+        >
+          <AppIcon name="receipt" class="h-4 w-4" />
+          {{ creatingOrder ? 'Criando...' : 'Novo pedido' }}
         </button>
         <RouterLink
           :to="{ path: '/payments', query: { customerId: customer.id } }"
@@ -340,34 +360,57 @@ function paymentRemovalMessage(): string {
     </PageHeader>
 
     <div class="card card-pad mb-5">
-      <p class="text-xs font-medium uppercase tracking-wide text-slate-500">Saldo</p>
-      <p
-        class="mt-1 text-2xl font-bold"
-        :class="
-          customer.balanceCents < 0
-            ? 'text-red-600'
-            : customer.balanceCents > 0
-              ? 'text-emerald-600'
-              : 'text-slate-900'
-        "
-      >
-        {{ formatBRL(customer.balanceCents) }}
-      </p>
-      <p class="mt-1 text-xs text-slate-500">
-        {{
-          customer.balanceCents < 0
-            ? 'Cliente deve este valor.'
-            : customer.balanceCents > 0
-              ? 'Cliente tem crédito.'
-              : 'Sem pendências.'
-        }}
-      </p>
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p class="text-xs font-medium uppercase tracking-wide text-slate-500">Saldo</p>
+          <p
+            class="mt-1 text-2xl font-bold"
+            :class="
+              customer.balanceCents < 0
+                ? 'text-red-600'
+                : customer.balanceCents > 0
+                  ? 'text-emerald-600'
+                  : 'text-slate-900'
+            "
+          >
+            {{ formatBRL(customer.balanceCents) }}
+          </p>
+          <p class="mt-1 text-xs text-slate-500">
+            {{
+              customer.balanceCents < 0
+                ? 'Cliente deve este valor.'
+                : customer.balanceCents > 0
+                  ? 'Cliente tem crédito.'
+                  : 'Sem pendências.'
+            }}
+          </p>
+        </div>
+        <button type="button" class="btn btn-secondary shrink-0" @click="openAdjust">
+          <AppIcon name="adjustments" class="h-4 w-4" />
+          Ajustar saldo
+        </button>
+      </div>
     </div>
 
     <div class="grid gap-4 lg:grid-cols-2">
       <section class="card card-pad">
         <h2 class="mb-3 text-sm font-semibold text-slate-900">Pedidos</h2>
-        <EmptyState v-if="orders.length === 0" icon="receipt" title="Nenhum pedido" />
+        <EmptyState
+          v-if="orders.length === 0"
+          icon="receipt"
+          title="Nenhum pedido"
+          description="Crie um pedido para este cliente."
+        >
+          <button
+            type="button"
+            class="btn btn-primary"
+            :disabled="creatingOrder"
+            @click="createOrderForCustomer"
+          >
+            <AppIcon name="receipt" class="h-4 w-4" />
+            Criar pedido
+          </button>
+        </EmptyState>
         <ul v-else class="divide-y divide-slate-100">
           <li v-for="order in orders" :key="order.id">
             <RouterLink
@@ -379,7 +422,7 @@ function paymentRemovalMessage(): string {
                   {{ formatDateTime(order.createdAt) }}
                 </p>
                 <p class="text-xs text-slate-500">
-                  {{ orderItemCounts.get(order.id) ?? 0 }} item(ns)
+                  {{ pluralize(orderItemCounts.get(order.id) ?? 0, 'item', 'itens') }}
                 </p>
               </div>
               <div class="flex items-center gap-2">
@@ -433,9 +476,7 @@ function paymentRemovalMessage(): string {
               "
             >
               {{
-                entry.kind === 'adjustment'
-                  ? formatSignedBRL(entry.amountCents)
-                  : formatBRL(entry.amountCents)
+                formatSignedBRL(entry.amountCents)
               }}
             </span>
             <button
@@ -497,7 +538,7 @@ function paymentRemovalMessage(): string {
     <form class="space-y-4" @submit.prevent="saveAdjust">
       <div>
         <label class="label" for="adjust-balance">Novo saldo (R$)</label>
-        <SignedMoneyInput id="adjust-balance" v-model="adjustBalanceCents" required />
+        <MoneyInput id="adjust-balance" v-model="adjustBalanceCents" required />
         <p class="mt-1.5 text-xs text-slate-500">
           Saldo atual: {{ customer ? formatBRL(customer.balanceCents) : '' }}
           <span
@@ -537,7 +578,7 @@ function paymentRemovalMessage(): string {
     <form class="space-y-4" @submit.prevent="saveEditAdjustment">
       <div>
         <label class="label" for="edit-adjust-balance">Novo saldo (R$)</label>
-        <SignedMoneyInput id="edit-adjust-balance" v-model="editAdjustBalanceCents" required />
+        <MoneyInput id="edit-adjust-balance" v-model="editAdjustBalanceCents" required />
         <p class="mt-1.5 text-xs text-slate-500">
           Ajuste atual:
           {{ editingAdjustment ? formatSignedBRL(editingAdjustment.amountCents) : '' }}
@@ -578,14 +619,12 @@ function paymentRemovalMessage(): string {
     <form class="space-y-4" @submit.prevent="saveEditPayment">
       <div>
         <label class="label" for="edit-payment-amount">Valor (R$)</label>
-        <input
+        <MoneyInput
           id="edit-payment-amount"
-          v-model.number="editPaymentAmount"
-          class="input"
-          type="number"
-          min="0.01"
-          step="0.01"
+          v-model="editPaymentAmountCents"
           required
+          :allow-negative="false"
+          :show-preview="false"
         />
         <p class="mt-1.5 text-xs text-slate-500">
           A diferença é aplicada automaticamente no saldo do cliente.

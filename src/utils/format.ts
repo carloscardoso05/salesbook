@@ -31,3 +31,7 @@ export function formatDateTime(iso: string): string {
 export function formatDate(iso: string): string {
   return dateFormatter.format(new Date(iso))
 }
+
+export function pluralize(count: number, singular: string, plural: string): string {
+  return `${count} ${count === 1 ? singular : plural}`
+}

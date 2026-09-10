@@ -10,7 +10,7 @@ import { useDatabase, useSalesbook } from '../composables/useDatabase'
 import { useRxQuery } from '../composables/useRxQuery'
 import { errorMessage, toast } from '../composables/useToast'
 import type { CustomerDocType, OrderDocType, OrderItemDocType } from '../db/types'
-import { formatBRL, formatDateTime } from '../utils/format'
+import { formatBRL, formatDateTime, pluralize } from '../utils/format'
 
 const db = useDatabase()
 const service = useSalesbook()
@@ -85,7 +85,7 @@ function customerName(customerId: string): string {
 </script>
 
 <template>
-  <PageHeader title="Pedidos" :subtitle="`${orders.length} registrado(s)`">
+  <PageHeader title="Pedidos" :subtitle="pluralize(orders.length, 'registrado', 'registrados')">
     <template #actions>
       <button
         type="button"
@@ -108,7 +108,17 @@ function customerName(customerId: string): string {
     icon="receipt"
     title="Nenhum pedido registrado"
     description="Crie um pedido, escolha o cliente e adicione os produtos vendidos."
-  />
+  >
+    <button
+      type="button"
+      class="btn btn-primary"
+      :disabled="customers.length === 0"
+      @click="openForm"
+    >
+      <AppIcon name="plus" class="h-4 w-4" />
+      Novo pedido
+    </button>
+  </EmptyState>
 
   <ul v-else class="space-y-2.5">
     <li v-for="order in orders" :key="order.id" class="card card-pad flex items-center gap-1">
@@ -121,8 +131,8 @@ function customerName(customerId: string): string {
             {{ customerName(order.customerId) }}
           </p>
           <p class="mt-0.5 text-xs text-slate-500">
-            {{ formatDateTime(order.createdAt) }} · {{ orderSummaries.count.get(order.id) ?? 0 }}
-            item(ns)
+            {{ formatDateTime(order.createdAt) }} ·
+            {{ pluralize(orderSummaries.count.get(order.id) ?? 0, 'item', 'itens') }}
           </p>
         </div>
         <span class="text-sm font-semibold text-slate-900">
@@ -165,7 +175,7 @@ function customerName(customerId: string): string {
   <ConfirmDialog
     :open="orderToRemove !== null"
     title="Excluir pedido"
-    :message="`Excluir este pedido remove ${orderToRemove ? (orderSummaries.count.get(orderToRemove.id) ?? 0) : 0} item(ns), devolve o estoque e estorna o saldo do cliente. Deseja continuar?`"
+    :message="`Excluir este pedido remove ${pluralize(orderToRemove ? (orderSummaries.count.get(orderToRemove.id) ?? 0) : 0, 'item', 'itens')}, devolve o estoque e estorna o saldo do cliente. Deseja continuar?`"
     confirm-label="Excluir pedido"
     danger
     :busy="removing"

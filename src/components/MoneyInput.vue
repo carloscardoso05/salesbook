@@ -1,28 +1,31 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { formatBRL } from '../utils/format'
-import { formatAmountInput, toCents } from '../utils/money'
+import {
+  formatAmountInput,
+  normalizeAmountText,
+  parseAmountText,
+  toCents,
+} from '../utils/money'
 
-const props = defineProps<{
-  modelValue: number | null
-  id?: string
-  required?: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    modelValue: number | null
+    id?: string
+    required?: boolean
+    allowNegative?: boolean
+    showPreview?: boolean
+  }>(),
+  { allowNegative: true, showPreview: true },
+)
 
 const emit = defineEmits<{ 'update:modelValue': [value: number | null] }>()
 
 const negative = ref(false)
 const text = ref('')
 
-function parseReais(raw: string): number | null {
-  const normalized = raw.trim().replace(/\s/g, '').replace(',', '.')
-  if (normalized === '' || normalized === '.' || normalized === '-') return null
-  const parsed = Number(normalized)
-  return Number.isFinite(parsed) ? parsed : null
-}
-
 function currentCents(): number | null {
-  const parsed = parseReais(text.value)
+  const parsed = parseAmountText(text.value)
   if (parsed === null) return null
   const cents = toCents(parsed)
   return negative.value ? -cents : cents
@@ -47,15 +50,24 @@ const signedValue = computed(() => currentCents())
 
 function onInput(event: Event): void {
   const input = event.target as HTMLInputElement
-  const raw = input.value
+  let raw = input.value
+  let nextNegative = negative.value
   if (raw.startsWith('-')) {
-    negative.value = true
-    text.value = raw.slice(1)
-    input.value = text.value
-  } else {
-    text.value = raw
+    nextNegative = true
+    raw = raw.slice(1)
   }
+  if (!props.allowNegative) nextNegative = false
+  const normalized = normalizeAmountText(raw)
+  negative.value = nextNegative
+  text.value = normalized
+  input.value = normalized
   emit('update:modelValue', signedValue.value)
+}
+
+function onBlur(): void {
+  const parsed = parseAmountText(text.value)
+  if (parsed === null) return
+  text.value = formatAmountInput(toCents(parsed))
 }
 
 function toggleSign(): void {
@@ -74,12 +86,14 @@ function toggleSign(): void {
         type="text"
         inputmode="decimal"
         autocomplete="off"
-        pattern="\d*([.,]\d*)?"
+        pattern="\d*([.,]\d{0,2})?"
         :required="required"
         placeholder="0,00"
         @input="onInput"
+        @blur="onBlur"
       />
       <button
+        v-if="allowNegative"
         type="button"
         class="btn shrink-0 border px-3"
         :class="
@@ -95,7 +109,11 @@ function toggleSign(): void {
         ±
       </button>
     </div>
-    <p class="mt-1.5 text-xs" :class="negative ? 'text-red-600' : 'text-slate-500'">
+    <p
+      v-if="showPreview"
+      class="mt-1.5 text-xs"
+      :class="negative ? 'text-red-600' : 'text-slate-500'"
+    >
       Valor: {{ signedValue === null ? '—' : formatBRL(signedValue) }}
     </p>
   </div>

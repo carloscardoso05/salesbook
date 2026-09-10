@@ -22,7 +22,13 @@ import {
   ReferencedEntityError,
 } from '../src/services/errors'
 import { createSalesbookService, type SalesbookService } from '../src/services/salesbook'
-import { formatAmountInput, fromCents, toCents } from '../src/utils/money'
+import {
+  formatAmountInput,
+  fromCents,
+  normalizeAmountText,
+  parseAmountText,
+  toCents,
+} from '../src/utils/money'
 
 let db: SalesbookDatabase
 let service: SalesbookService
@@ -57,6 +63,16 @@ describe('utilitários de dinheiro', () => {
     expect(fromCents(3030)).toBe(30.3)
     expect(formatAmountInput(3030)).toBe('30,30')
     expect(formatAmountInput(-2550)).toBe('25,50')
+  })
+
+  it('limita a duas casas e interpreta separadores pt-BR', () => {
+    expect(normalizeAmountText('25,505')).toBe('25,50')
+    expect(normalizeAmountText('25.509')).toBe('25.50')
+    expect(normalizeAmountText('1.234,567')).toBe('1234,56')
+    expect(normalizeAmountText('abc')).toBe('')
+    expect(parseAmountText('1.234,56')).toBe(1234.56)
+    expect(parseAmountText('25,5')).toBe(25.5)
+    expect(parseAmountText('')).toBeNull()
   })
 })
 
