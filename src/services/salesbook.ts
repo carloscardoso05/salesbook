@@ -16,9 +16,11 @@ import {
   InvalidNameError,
   InvalidPaymentError,
   InvalidPriceError,
+  InvalidQuantityError,
   InvalidStockError,
   OrderItemNotFoundError,
   OrderNotFoundError,
+  PaymentNotFoundError,
   ProductNotFoundError,
   ReferencedEntityError,
 } from './errors'
@@ -46,6 +48,11 @@ function validatePrice(price: number): number {
 
 function validateStockQuantity(quantity: number): number {
   if (!Number.isInteger(quantity) || quantity < 0) throw new InvalidStockError()
+  return quantity
+}
+
+function validateItemQuantity(quantity: number): number {
+  if (!Number.isInteger(quantity) || quantity < 1) throw new InvalidQuantityError()
   return quantity
 }
 
@@ -187,45 +194,52 @@ export function createSalesbookService(db: SalesbookDatabase) {
     orderId: string
     productId: string
     price: number
-  }): Promise<OrderItemDocType> {
+    quantity?: number
+  }): Promise<OrderItemDocType[]> {
     return mutex.run(async () => {
       const price = validatePrice(input.price)
+      const quantity = validateItemQuantity(input.quantity ?? 1)
       const order = await db.orders.findOne(input.orderId).exec()
       if (!order) throw new OrderNotFoundError()
       const product = await db.products.findOne(input.productId).exec()
       if (!product) throw new ProductNotFoundError()
       const customer = await db.customers.findOne(order.customerId).exec()
       if (!customer) throw new CustomerNotFoundError()
-      if (product.stockQuantity < 1) throw new InsufficientStockError(product.name)
+      if (product.stockQuantity < quantity) throw new InsufficientStockError(product.name)
 
+      const total = price * quantity
       let stockDebited = false
       let balanceDebited = false
       try {
         await product.incrementalModify((data) => {
-          if (data.stockQuantity < 1) throw new InsufficientStockError(data.name)
-          data.stockQuantity -= 1
+          if (data.stockQuantity < quantity) throw new InsufficientStockError(data.name)
+          data.stockQuantity -= quantity
           return data
         })
         stockDebited = true
 
         await customer.incrementalModify((data) => {
-          data.balance -= price
+          data.balance -= total
           return data
         })
         balanceDebited = true
 
-        const item = await db.orderitems.insert({
-          id: newId(),
-          orderId: order.id,
-          productId: product.id,
-          price,
-        })
-        return item.toMutableJSON()
+        const items: OrderItemDocType[] = []
+        for (let index = 0; index < quantity; index += 1) {
+          const item = await db.orderitems.insert({
+            id: newId(),
+            orderId: order.id,
+            productId: product.id,
+            price,
+          })
+          items.push(item.toMutableJSON())
+        }
+        return items
       } catch (error) {
         if (balanceDebited) {
           await customer
             .incrementalModify((data) => {
-              data.balance += price
+              data.balance += total
               return data
             })
             .catch(() => undefined)
@@ -233,7 +247,7 @@ export function createSalesbookService(db: SalesbookDatabase) {
         if (stockDebited) {
           await product
             .incrementalModify((data) => {
-              data.stockQuantity += 1
+              data.stockQuantity += quantity
               return data
             })
             .catch(() => undefined)
@@ -295,6 +309,16 @@ export function createSalesbookService(db: SalesbookDatabase) {
     })
   }
 
+  async function removeOrderItems(itemIds: string[]): Promise<void> {
+    await mutex.run(async () => {
+      for (const itemId of itemIds) {
+        const item = await db.orderitems.findOne(itemId).exec()
+        if (!item) continue
+        await removeOrderItemDocument(item)
+      }
+    })
+  }
+
   async function removeOrder(orderId: string): Promise<void> {
     await mutex.run(async () => {
       const order = await db.orders.findOne(orderId).exec()
@@ -340,6 +364,66 @@ export function createSalesbookService(db: SalesbookDatabase) {
     })
   }
 
+  async function updatePayment(paymentId: string, changes: { amount: number }): Promise<void> {
+    await mutex.run(async () => {
+      const amount = validatePaymentAmount(changes.amount)
+      const payment = await db.payments.findOne(paymentId).exec()
+      if (!payment) throw new PaymentNotFoundError()
+      const customer = await db.customers.findOne(payment.customerId).exec()
+      if (!customer) throw new CustomerNotFoundError()
+
+      const delta = amount - payment.amount
+      await customer.incrementalModify((data) => {
+        data.balance += delta
+        return data
+      })
+      try {
+        await payment.incrementalModify((data) => {
+          data.amount = amount
+          return data
+        })
+      } catch (error) {
+        await customer
+          .incrementalModify((data) => {
+            data.balance -= delta
+            return data
+          })
+          .catch(() => undefined)
+        throw error
+      }
+    })
+  }
+
+  async function removePayment(paymentId: string): Promise<void> {
+    await mutex.run(async () => {
+      const payment = await db.payments.findOne(paymentId).exec()
+      if (!payment) throw new PaymentNotFoundError()
+      const customer = await db.customers.findOne(payment.customerId).exec()
+
+      let balanceDebited = false
+      try {
+        if (customer) {
+          await customer.incrementalModify((data) => {
+            data.balance -= payment.amount
+            return data
+          })
+          balanceDebited = true
+        }
+        await payment.remove()
+      } catch (error) {
+        if (balanceDebited && customer) {
+          await customer
+            .incrementalModify((data) => {
+              data.balance += payment.amount
+              return data
+            })
+            .catch(() => undefined)
+        }
+        throw error
+      }
+    })
+  }
+
   return {
     createCustomer,
     updateCustomerName,
@@ -350,8 +434,11 @@ export function createSalesbookService(db: SalesbookDatabase) {
     createOrder,
     addOrderItem,
     removeOrderItem,
+    removeOrderItems,
     removeOrder,
     addPayment,
+    updatePayment,
+    removePayment,
   }
 }
 

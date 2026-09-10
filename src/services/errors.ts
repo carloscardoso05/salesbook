@@ -29,6 +29,18 @@ export class OrderItemNotFoundError extends SalesbookError {
   }
 }
 
+export class PaymentNotFoundError extends SalesbookError {
+  constructor() {
+    super('Pagamento não encontrado.')
+  }
+}
+
+export class InvalidQuantityError extends SalesbookError {
+  constructor() {
+    super('A quantidade deve ser um número inteiro maior ou igual a 1.')
+  }
+}
+
 export class InsufficientStockError extends SalesbookError {
   constructor(productName: string) {
     super(`Estoque insuficiente para "${productName}".`)

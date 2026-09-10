@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
+import AppIcon from '../components/AppIcon.vue'
 import EmptyState from '../components/EmptyState.vue'
 import PageHeader from '../components/PageHeader.vue'
 import { useDatabase } from '../composables/useDatabase'
@@ -109,7 +110,7 @@ function customerName(customerId: string): string {
         <li v-for="order in recentOrders" :key="order.id">
           <RouterLink
             :to="`/orders/${order.id}`"
-            class="flex items-center justify-between gap-3 py-2.5"
+            class="tap-row -mx-1 flex items-center justify-between gap-3 rounded-xl px-1 py-2.5"
           >
             <div class="min-w-0">
               <p class="truncate text-sm font-medium text-slate-800">
@@ -120,9 +121,12 @@ function customerName(customerId: string): string {
                 {{ orderSummaries.itemCount.get(order.id) ?? 0 }} item(ns)
               </p>
             </div>
-            <span class="text-sm font-semibold text-slate-900">
-              {{ formatBRL(orderSummaries.itemTotal.get(order.id) ?? 0) }}
-            </span>
+            <div class="flex items-center gap-2">
+              <span class="text-sm font-semibold text-slate-900">
+                {{ formatBRL(orderSummaries.itemTotal.get(order.id) ?? 0) }}
+              </span>
+              <AppIcon name="chevronRight" class="h-4 w-4 shrink-0 text-slate-300" />
+            </div>
           </RouterLink>
         </li>
       </ul>

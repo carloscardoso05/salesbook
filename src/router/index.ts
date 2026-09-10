@@ -1,7 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
 export const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     {
       path: '/',
@@ -37,6 +37,10 @@ export const router = createRouter({
       path: '/payments',
       name: 'payments',
       component: () => import('../views/PaymentsView.vue'),
+    },
+    {
+      path: '/:pathMatch(.*)*',
+      redirect: '/',
     },
   ],
   scrollBehavior: () => ({ top: 0 }),

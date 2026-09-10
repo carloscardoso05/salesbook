@@ -10,10 +10,10 @@ const emit = defineEmits<{ close: [] }>()
   <Teleport to="body">
     <div
       v-if="open"
-      class="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/50 backdrop-blur-sm sm:items-center sm:p-4"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm"
       @click.self="emit('close')"
     >
-      <div class="w-full max-w-lg rounded-t-3xl bg-white p-5 shadow-xl sm:rounded-3xl">
+      <div class="max-h-[90svh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-5 shadow-xl">
         <div class="mb-4 flex items-center justify-between gap-4">
           <h2 class="text-lg font-semibold text-slate-900">{{ title }}</h2>
           <button

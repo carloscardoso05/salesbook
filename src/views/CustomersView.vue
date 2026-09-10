@@ -78,23 +78,29 @@ async function confirmRemove(): Promise<void> {
   </EmptyState>
 
   <ul v-else class="space-y-2.5">
-    <li v-for="customer in customers" :key="customer.id" class="card card-pad flex items-center gap-3">
-      <RouterLink :to="`/customers/${customer.id}`" class="min-w-0 flex-1">
-        <p class="truncate text-sm font-semibold text-slate-900">{{ customer.name }}</p>
-        <p class="mt-0.5 text-xs text-slate-500">Ver detalhes</p>
-      </RouterLink>
-      <span
-        class="badge"
-        :class="
-          customer.balance < 0
-            ? 'bg-red-100 text-red-700'
-            : customer.balance > 0
-              ? 'bg-emerald-100 text-emerald-700'
-              : 'bg-slate-100 text-slate-600'
-        "
+    <li v-for="customer in customers" :key="customer.id" class="card card-pad flex items-center gap-1">
+      <RouterLink
+        :to="`/customers/${customer.id}`"
+        class="tap-row flex min-w-0 flex-1 items-center gap-3 rounded-xl py-1"
       >
-        {{ formatBRL(customer.balance) }}
-      </span>
+        <div class="min-w-0 flex-1">
+          <p class="truncate text-sm font-semibold text-slate-900">{{ customer.name }}</p>
+          <p class="mt-0.5 text-xs text-slate-500">Ver detalhes</p>
+        </div>
+        <span
+          class="badge"
+          :class="
+            customer.balance < 0
+              ? 'bg-red-100 text-red-700'
+              : customer.balance > 0
+                ? 'bg-emerald-100 text-emerald-700'
+                : 'bg-slate-100 text-slate-600'
+          "
+        >
+          {{ formatBRL(customer.balance) }}
+        </span>
+        <AppIcon name="chevronRight" class="h-4 w-4 shrink-0 text-slate-300" />
+      </RouterLink>
       <button
         type="button"
         class="btn btn-ghost btn-icon text-slate-400 hover:text-red-600"

@@ -11,6 +11,12 @@ import { errorMessage, toast } from '../composables/useToast'
 import type { CustomerDocType, OrderDocType, OrderItemDocType, ProductDocType } from '../db/types'
 import { formatBRL, formatDateTime } from '../utils/format'
 
+type ItemGroup = {
+  productId: string
+  name: string
+  items: OrderItemDocType[]
+}
+
 const route = useRoute()
 const router = useRouter()
 const db = useDatabase()
@@ -46,13 +52,55 @@ const productNames = computed(() => {
   return map
 })
 
+const groups = computed<ItemGroup[]>(() => {
+  const map = new Map<string, OrderItemDocType[]>()
+  for (const item of items.value) {
+    const list = map.get(item.productId)
+    if (list) list.push(item)
+    else map.set(item.productId, [item])
+  }
+  return [...map.entries()]
+    .map(([productId, groupItems]) => ({
+      productId,
+      name: productNames.value.get(productId) ?? 'Produto removido',
+      items: [...groupItems].sort((a, b) => a.price - b.price),
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
+})
+
+const collapsed = ref<Set<string>>(new Set())
+
+function toggleGroup(productId: string): void {
+  const next = new Set(collapsed.value)
+  if (next.has(productId)) next.delete(productId)
+  else next.add(productId)
+  collapsed.value = next
+}
+
+function isExpanded(productId: string): boolean {
+  return !collapsed.value.has(productId)
+}
+
+function groupTotal(group: ItemGroup): number {
+  return group.items.reduce((sum, item) => sum + item.price, 0)
+}
+
 const total = computed(() => items.value.reduce((sum, item) => sum + item.price, 0))
 
 const selectedProductId = ref('')
+const quantity = ref(1)
 const price = ref<number | null>(null)
 const adding = ref(false)
+
+const selectedProduct = computed(
+  () => products.value.find((product) => product.id === selectedProductId.value) ?? null,
+)
+const maxQuantity = computed(() => selectedProduct.value?.stockQuantity ?? 0)
+
 const itemToRemove = ref<OrderItemDocType | null>(null)
 const removingItem = ref(false)
+const groupToRemove = ref<ItemGroup | null>(null)
+const removingGroup = ref(false)
 const isRemoveOpen = ref(false)
 const removingOrder = ref(false)
 
@@ -74,9 +122,11 @@ async function addItem(): Promise<void> {
       orderId: orderId.value,
       productId: selectedProductId.value,
       price: price.value ?? Number.NaN,
+      quantity: quantity.value,
     })
-    toast.success('Item adicionado.')
+    toast.success('Itens adicionados.')
     price.value = null
+    quantity.value = 1
   } catch (error) {
     toast.error(errorMessage(error))
   } finally {
@@ -95,6 +145,20 @@ async function confirmRemoveItem(): Promise<void> {
     toast.error(errorMessage(error))
   } finally {
     removingItem.value = false
+  }
+}
+
+async function confirmRemoveGroup(): Promise<void> {
+  if (!groupToRemove.value) return
+  removingGroup.value = true
+  try {
+    await service.removeOrderItems(groupToRemove.value.items.map((item) => item.id))
+    toast.success('Itens removidos, estoque devolvido e saldo estornado.')
+    groupToRemove.value = null
+  } catch (error) {
+    toast.error(errorMessage(error))
+  } finally {
+    removingGroup.value = false
   }
 }
 
@@ -120,7 +184,7 @@ function productName(productId: string): string {
 <template>
   <RouterLink
     to="/orders"
-    class="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-slate-800"
+    class="tap-row mb-4 inline-flex items-center gap-1.5 rounded-lg px-1 text-sm font-medium text-slate-500 hover:text-slate-800"
   >
     <AppIcon name="arrowLeft" class="h-4 w-4" />
     Pedidos
@@ -147,32 +211,62 @@ function productName(productId: string): string {
       <section class="card card-pad">
         <h2 class="mb-3 text-sm font-semibold text-slate-900">Itens</h2>
         <EmptyState
-          v-if="items.length === 0"
+          v-if="groups.length === 0"
           icon="cube"
           title="Nenhum item"
           description="Adicione produtos a este pedido."
         />
-        <ul v-else class="divide-y divide-slate-100">
+        <ul v-else class="space-y-2">
           <li
-            v-for="item in items"
-            :key="item.id"
-            class="flex items-center justify-between gap-3 py-2.5"
+            v-for="group in groups"
+            :key="group.productId"
+            class="overflow-hidden rounded-2xl border border-slate-200"
           >
-            <div class="min-w-0 flex-1">
-              <p class="truncate text-sm font-medium text-slate-800">
-                {{ productName(item.productId) }}
-              </p>
-              <p class="text-xs text-slate-500">1 unidade</p>
+            <div class="flex items-center gap-1 pr-2">
+              <button
+                type="button"
+                class="tap-row flex min-w-0 flex-1 items-center gap-2 rounded-xl px-3 py-2.5 text-left"
+                @click="toggleGroup(group.productId)"
+              >
+                <AppIcon
+                  :name="isExpanded(group.productId) ? 'chevronDown' : 'chevronRight'"
+                  class="h-4 w-4 shrink-0 text-slate-400"
+                />
+                <span class="min-w-0 flex-1 truncate text-sm font-semibold text-slate-800">
+                  {{ group.name }}
+                </span>
+                <span class="badge bg-slate-100 text-slate-600">{{ group.items.length }} un.</span>
+              </button>
+              <button
+                type="button"
+                class="btn btn-ghost btn-icon text-slate-400 hover:text-red-600"
+                aria-label="Remover todas as unidades do produto"
+                @click="groupToRemove = group"
+              >
+                <AppIcon name="trash" class="h-5 w-5" />
+              </button>
             </div>
-            <span class="text-sm font-semibold text-slate-900">{{ formatBRL(item.price) }}</span>
-            <button
-              type="button"
-              class="btn btn-ghost btn-icon text-slate-400 hover:text-red-600"
-              aria-label="Remover item"
-              @click="itemToRemove = item"
+            <ul
+              v-if="isExpanded(group.productId)"
+              class="divide-y divide-slate-100 border-t border-slate-100"
             >
-              <AppIcon name="trash" class="h-5 w-5" />
-            </button>
+              <li
+                v-for="item in group.items"
+                :key="item.id"
+                class="flex items-center gap-3 py-2 pl-9 pr-2"
+              >
+                <span class="flex-1 text-xs text-slate-500">1 unidade</span>
+                <span class="text-sm font-semibold text-slate-900">{{ formatBRL(item.price) }}</span>
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-icon text-slate-400 hover:text-red-600"
+                  aria-label="Remover unidade"
+                  @click="itemToRemove = item"
+                >
+                  <AppIcon name="trash" class="h-5 w-5" />
+                </button>
+              </li>
+            </ul>
           </li>
         </ul>
         <div class="mt-4 flex items-center justify-between border-t border-slate-200 pt-3">
@@ -197,19 +291,37 @@ function productName(productId: string): string {
               </option>
             </select>
           </div>
-          <div>
-            <label class="label" for="item-price">Preço (R$)</label>
-            <input
-              id="item-price"
-              v-model.number="price"
-              class="input"
-              type="number"
-              min="0"
-              step="0.01"
-              required
-              placeholder="0,00"
-            />
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="label" for="item-quantity">Quantidade</label>
+              <input
+                id="item-quantity"
+                v-model.number="quantity"
+                class="input"
+                type="number"
+                min="1"
+                :max="maxQuantity"
+                step="1"
+                required
+              />
+            </div>
+            <div>
+              <label class="label" for="item-price">Preço (R$)</label>
+              <input
+                id="item-price"
+                v-model.number="price"
+                class="input"
+                type="number"
+                min="0"
+                step="0.01"
+                required
+                placeholder="0,00"
+              />
+            </div>
           </div>
+          <p v-if="selectedProduct" class="text-xs text-slate-500">
+            {{ maxQuantity }} unidade(s) disponível(is) em estoque.
+          </p>
           <button
             type="submit"
             class="btn btn-primary w-full"
@@ -237,13 +349,24 @@ function productName(productId: string): string {
 
   <ConfirmDialog
     :open="itemToRemove !== null"
-    title="Remover item"
+    title="Remover unidade"
     :message="`Remover ${itemToRemove ? productName(itemToRemove.productId) : ''} devolve 1 unidade ao estoque e estorna ${itemToRemove ? formatBRL(itemToRemove.price) : ''} do saldo do cliente.`"
     confirm-label="Remover"
     danger
     :busy="removingItem"
     @cancel="itemToRemove = null"
     @confirm="confirmRemoveItem"
+  />
+
+  <ConfirmDialog
+    :open="groupToRemove !== null"
+    title="Remover produto do pedido"
+    :message="`Remover ${groupToRemove?.items.length ?? 0} unidade(s) de ${groupToRemove?.name ?? ''} (${groupToRemove ? formatBRL(groupTotal(groupToRemove)) : ''}) devolve o estoque e estorna o valor no saldo do cliente.`"
+    confirm-label="Remover tudo"
+    danger
+    :busy="removingGroup"
+    @cancel="groupToRemove = null"
+    @confirm="confirmRemoveGroup"
   />
 
   <ConfirmDialog

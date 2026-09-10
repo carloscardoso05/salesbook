@@ -111,19 +111,25 @@ function customerName(customerId: string): string {
   />
 
   <ul v-else class="space-y-2.5">
-    <li v-for="order in orders" :key="order.id" class="card card-pad flex items-center gap-3">
-      <RouterLink :to="`/orders/${order.id}`" class="min-w-0 flex-1">
-        <p class="truncate text-sm font-semibold text-slate-900">
-          {{ customerName(order.customerId) }}
-        </p>
-        <p class="mt-0.5 text-xs text-slate-500">
-          {{ formatDateTime(order.createdAt) }} · {{ orderSummaries.count.get(order.id) ?? 0 }}
-          item(ns)
-        </p>
+    <li v-for="order in orders" :key="order.id" class="card card-pad flex items-center gap-1">
+      <RouterLink
+        :to="`/orders/${order.id}`"
+        class="tap-row flex min-w-0 flex-1 items-center gap-3 rounded-xl py-1"
+      >
+        <div class="min-w-0 flex-1">
+          <p class="truncate text-sm font-semibold text-slate-900">
+            {{ customerName(order.customerId) }}
+          </p>
+          <p class="mt-0.5 text-xs text-slate-500">
+            {{ formatDateTime(order.createdAt) }} · {{ orderSummaries.count.get(order.id) ?? 0 }}
+            item(ns)
+          </p>
+        </div>
+        <span class="text-sm font-semibold text-slate-900">
+          {{ formatBRL(orderSummaries.total.get(order.id) ?? 0) }}
+        </span>
+        <AppIcon name="chevronRight" class="h-4 w-4 shrink-0 text-slate-300" />
       </RouterLink>
-      <span class="text-sm font-semibold text-slate-900">
-        {{ formatBRL(orderSummaries.total.get(order.id) ?? 0) }}
-      </span>
       <button
         type="button"
         class="btn btn-ghost btn-icon text-slate-400 hover:text-red-600"

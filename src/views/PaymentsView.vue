@@ -1,14 +1,16 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import AppIcon from '../components/AppIcon.vue'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
 import EmptyState from '../components/EmptyState.vue'
+import ModalDialog from '../components/ModalDialog.vue'
 import PageHeader from '../components/PageHeader.vue'
 import { useDatabase, useSalesbook } from '../composables/useDatabase'
 import { useRxQuery } from '../composables/useRxQuery'
 import { errorMessage, toast } from '../composables/useToast'
 import type { CustomerDocType, PaymentDocType } from '../db/types'
 import { formatBRL, formatDateTime } from '../utils/format'
-import { useRoute } from 'vue-router'
 
 const route = useRoute()
 const db = useDatabase()
@@ -30,6 +32,13 @@ const customerNames = computed(() => {
 const selectedCustomerId = ref('')
 const amount = ref<number | null>(null)
 const saving = ref(false)
+
+const editing = ref<PaymentDocType | null>(null)
+const editAmount = ref<number | null>(null)
+const savingEdit = ref(false)
+
+const paymentToRemove = ref<PaymentDocType | null>(null)
+const removing = ref(false)
 
 onMounted(() => {
   const preselect = route.query.customerId
@@ -59,6 +68,39 @@ async function submit(): Promise<void> {
     toast.error(errorMessage(error))
   } finally {
     saving.value = false
+  }
+}
+
+function openEdit(payment: PaymentDocType): void {
+  editing.value = payment
+  editAmount.value = payment.amount
+}
+
+async function saveEdit(): Promise<void> {
+  if (!editing.value) return
+  savingEdit.value = true
+  try {
+    await service.updatePayment(editing.value.id, { amount: editAmount.value ?? Number.NaN })
+    toast.success('Pagamento atualizado e saldo ajustado.')
+    editing.value = null
+  } catch (error) {
+    toast.error(errorMessage(error))
+  } finally {
+    savingEdit.value = false
+  }
+}
+
+async function confirmRemove(): Promise<void> {
+  if (!paymentToRemove.value) return
+  removing.value = true
+  try {
+    await service.removePayment(paymentToRemove.value.id)
+    toast.success('Pagamento excluído e saldo ajustado.')
+    paymentToRemove.value = null
+  } catch (error) {
+    toast.error(errorMessage(error))
+  } finally {
+    removing.value = false
   }
 }
 
@@ -122,9 +164,9 @@ function customerName(customerId: string): string {
         <li
           v-for="payment in payments"
           :key="payment.id"
-          class="flex items-center justify-between gap-3 py-2.5"
+          class="flex items-center gap-2 py-2.5"
         >
-          <div class="min-w-0">
+          <div class="min-w-0 flex-1">
             <p class="truncate text-sm font-medium text-slate-800">
               {{ customerName(payment.customerId) }}
             </p>
@@ -133,8 +175,61 @@ function customerName(customerId: string): string {
           <span class="text-sm font-semibold text-emerald-600">
             {{ formatBRL(payment.amount) }}
           </span>
+          <button
+            type="button"
+            class="btn btn-ghost btn-icon text-slate-400 hover:text-indigo-600"
+            aria-label="Editar pagamento"
+            @click="openEdit(payment)"
+          >
+            <AppIcon name="pencil" class="h-5 w-5" />
+          </button>
+          <button
+            type="button"
+            class="btn btn-ghost btn-icon text-slate-400 hover:text-red-600"
+            aria-label="Excluir pagamento"
+            @click="paymentToRemove = payment"
+          >
+            <AppIcon name="trash" class="h-5 w-5" />
+          </button>
         </li>
       </ul>
     </section>
   </div>
+
+  <ModalDialog :open="editing !== null" title="Editar pagamento" @close="editing = null">
+    <form class="space-y-4" @submit.prevent="saveEdit">
+      <div>
+        <label class="label" for="edit-payment-amount">Valor (R$)</label>
+        <input
+          id="edit-payment-amount"
+          v-model.number="editAmount"
+          class="input"
+          type="number"
+          min="0.01"
+          step="0.01"
+          required
+        />
+        <p class="mt-1.5 text-xs text-slate-500">
+          A diferença é aplicada automaticamente no saldo do cliente.
+        </p>
+      </div>
+      <div class="flex justify-end gap-2">
+        <button type="button" class="btn btn-secondary" @click="editing = null">Cancelar</button>
+        <button type="submit" class="btn btn-primary" :disabled="savingEdit">
+          {{ savingEdit ? 'Salvando...' : 'Salvar' }}
+        </button>
+      </div>
+    </form>
+  </ModalDialog>
+
+  <ConfirmDialog
+    :open="paymentToRemove !== null"
+    title="Excluir pagamento"
+    :message="`Excluir este pagamento de ${paymentToRemove ? formatBRL(paymentToRemove.amount) : ''} debita o valor do saldo de ${paymentToRemove ? customerName(paymentToRemove.customerId) : 'cliente'}. Deseja continuar?`"
+    confirm-label="Excluir"
+    danger
+    :busy="removing"
+    @cancel="paymentToRemove = null"
+    @confirm="confirmRemove"
+  />
 </template>

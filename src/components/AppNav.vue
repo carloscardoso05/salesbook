@@ -41,8 +41,12 @@ function isActive(path: string): boolean {
         v-for="item in navItems"
         :key="item.to"
         :to="item.to"
-        class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors"
-        :class="isActive(item.to) ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'"
+        class="tap-row flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium"
+        :class="
+          isActive(item.to)
+            ? 'bg-indigo-50 text-indigo-700 active:bg-indigo-100'
+            : 'text-slate-600 hover:bg-slate-100 active:bg-slate-200'
+        "
       >
         <AppIcon :name="item.icon" class="h-5 w-5" />
         {{ item.label }}
@@ -66,8 +70,12 @@ function isActive(path: string): boolean {
         v-for="item in navItems"
         :key="item.to"
         :to="item.to"
-        class="flex flex-col items-center gap-1 py-2.5 text-[11px] font-medium"
-        :class="isActive(item.to) ? 'text-indigo-600' : 'text-slate-500'"
+        class="tap-row flex flex-col items-center gap-1 py-2.5 text-[11px] font-medium"
+        :class="
+          isActive(item.to)
+            ? 'text-indigo-600 active:bg-indigo-50'
+            : 'text-slate-500 active:bg-slate-100'
+        "
       >
         <AppIcon :name="item.icon" class="h-5 w-5" />
         {{ item.label }}

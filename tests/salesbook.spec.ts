@@ -7,6 +7,7 @@ import {
   InsufficientStockError,
   InvalidPaymentError,
   InvalidPriceError,
+  InvalidQuantityError,
   ReferencedEntityError,
 } from '../src/services/errors'
 import { createSalesbookService, type SalesbookService } from '../src/services/salesbook'
@@ -91,22 +92,117 @@ describe('addOrderItem', () => {
   })
 })
 
+describe('addOrderItem com quantidade', () => {
+  it('cria um registro por unidade e debita estoque e saldo em lote', async () => {
+    const customer = await service.createCustomer('Maria')
+    const product = await service.createProduct('Café', 5)
+    const order = await service.createOrder(customer.id)
+
+    const items = await service.addOrderItem({
+      orderId: order.id,
+      productId: product.id,
+      price: 10,
+      quantity: 3,
+    })
+
+    expect(items).toHaveLength(3)
+    expect(items.every((item) => item.price === 10)).toBe(true)
+    expect(await db.orderitems.count().exec()).toBe(3)
+    expect((await readProduct(product.id)).stockQuantity).toBe(2)
+    expect((await readCustomer(customer.id)).balance).toBe(-30)
+  })
+
+  it('não vende parcialmente quando o estoque é insuficiente', async () => {
+    const customer = await service.createCustomer('Maria')
+    const product = await service.createProduct('Café', 2)
+    const order = await service.createOrder(customer.id)
+
+    await expect(
+      service.addOrderItem({
+        orderId: order.id,
+        productId: product.id,
+        price: 10,
+        quantity: 3,
+      }),
+    ).rejects.toBeInstanceOf(InsufficientStockError)
+
+    expect((await readProduct(product.id)).stockQuantity).toBe(2)
+    expect((await readCustomer(customer.id)).balance).toBe(0)
+    expect(await db.orderitems.count().exec()).toBe(0)
+  })
+
+  it('rejeita quantidade inválida', async () => {
+    const customer = await service.createCustomer('Maria')
+    const product = await service.createProduct('Café', 5)
+    const order = await service.createOrder(customer.id)
+
+    await expect(
+      service.addOrderItem({ orderId: order.id, productId: product.id, price: 10, quantity: 0 }),
+    ).rejects.toBeInstanceOf(InvalidQuantityError)
+    await expect(
+      service.addOrderItem({ orderId: order.id, productId: product.id, price: 10, quantity: 1.5 }),
+    ).rejects.toBeInstanceOf(InvalidQuantityError)
+
+    expect((await readProduct(product.id)).stockQuantity).toBe(5)
+    expect(await db.orderitems.count().exec()).toBe(0)
+  })
+})
+
 describe('removeOrderItem', () => {
   it('devolve 1 unidade ao estoque e estorna o preço no saldo', async () => {
     const customer = await service.createCustomer('Maria')
     const product = await service.createProduct('Café', 2)
     const order = await service.createOrder(customer.id)
-    const item = await service.addOrderItem({
+    const [item] = await service.addOrderItem({
       orderId: order.id,
       productId: product.id,
       price: 10.5,
     })
 
-    await service.removeOrderItem(item.id)
+    await service.removeOrderItem(item?.id ?? '')
 
     expect((await readProduct(product.id)).stockQuantity).toBe(2)
     expect((await readCustomer(customer.id)).balance).toBe(0)
     expect(await db.orderitems.count().exec()).toBe(0)
+  })
+})
+
+describe('removeOrderItems (em lote)', () => {
+  it('devolve estoque e estorna saldo de todas as unidades', async () => {
+    const customer = await service.createCustomer('Maria')
+    const product = await service.createProduct('Café', 5)
+    const order = await service.createOrder(customer.id)
+    const items = await service.addOrderItem({
+      orderId: order.id,
+      productId: product.id,
+      price: 10,
+      quantity: 3,
+    })
+
+    await service.removeOrderItems(items.map((item) => item.id))
+
+    expect(await db.orderitems.count().exec()).toBe(0)
+    expect((await readProduct(product.id)).stockQuantity).toBe(5)
+    expect((await readCustomer(customer.id)).balance).toBe(0)
+  })
+
+  it('ignora ids inexistentes', async () => {
+    const customer = await service.createCustomer('Maria')
+    const product = await service.createProduct('Café', 2)
+    const order = await service.createOrder(customer.id)
+    const items = await service.addOrderItem({
+      orderId: order.id,
+      productId: product.id,
+      price: 10,
+      quantity: 2,
+    })
+    const ids = items.map((item) => item.id)
+
+    await service.removeOrderItems([ids[0] ?? '', 'inexistente'])
+
+    expect(await db.orderitems.count().exec()).toBe(1)
+    expect((await readProduct(product.id)).stockQuantity).toBe(1)
+    expect((await readCustomer(customer.id)).balance).toBe(-10)
   })
 })
 
@@ -177,6 +273,45 @@ describe('addPayment', () => {
 
     expect((await readCustomer(customer.id)).balance).toBe(0)
     expect(await db.payments.count().exec()).toBe(0)
+  })
+})
+
+describe('updatePayment e removePayment', () => {
+  it('editar o valor ajusta o saldo pela diferença', async () => {
+    const customer = await service.createCustomer('Maria')
+    const payment = await service.addPayment({ customerId: customer.id, amount: 20 })
+
+    await service.updatePayment(payment.id, { amount: 50 })
+    expect((await readCustomer(customer.id)).balance).toBe(50)
+
+    await service.updatePayment(payment.id, { amount: 5 })
+    expect((await readCustomer(customer.id)).balance).toBe(5)
+  })
+
+  it('rejeita valor inválido sem alterar o pagamento nem o saldo', async () => {
+    const customer = await service.createCustomer('Maria')
+    const payment = await service.addPayment({ customerId: customer.id, amount: 20 })
+
+    await expect(service.updatePayment(payment.id, { amount: 0 })).rejects.toBeInstanceOf(
+      InvalidPaymentError,
+    )
+
+    const stored = await db.payments.findOne(payment.id).exec()
+    expect(stored?.amount).toBe(20)
+    expect((await readCustomer(customer.id)).balance).toBe(20)
+  })
+
+  it('excluir o pagamento debita o valor do saldo', async () => {
+    const customer = await service.createCustomer('Maria')
+    const product = await service.createProduct('Café', 1)
+    const order = await service.createOrder(customer.id)
+    await service.addOrderItem({ orderId: order.id, productId: product.id, price: 30 })
+    const payment = await service.addPayment({ customerId: customer.id, amount: 20 })
+
+    await service.removePayment(payment.id)
+
+    expect(await db.payments.count().exec()).toBe(0)
+    expect((await readCustomer(customer.id)).balance).toBe(-30)
   })
 })
 

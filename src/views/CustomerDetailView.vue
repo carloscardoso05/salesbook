@@ -174,7 +174,7 @@ async function removeCustomer(): Promise<void> {
           <li v-for="order in orders" :key="order.id">
             <RouterLink
               :to="`/orders/${order.id}`"
-              class="flex items-center justify-between gap-3 py-2.5"
+              class="tap-row -mx-1 flex items-center justify-between gap-3 rounded-xl px-1 py-2.5"
             >
               <div>
                 <p class="text-sm font-medium text-slate-800">
@@ -184,9 +184,12 @@ async function removeCustomer(): Promise<void> {
                   {{ orderItemCounts.get(order.id) ?? 0 }} item(ns)
                 </p>
               </div>
-              <span class="text-sm font-semibold text-slate-900">
-                {{ formatBRL(orderTotals.get(order.id) ?? 0) }}
-              </span>
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-semibold text-slate-900">
+                  {{ formatBRL(orderTotals.get(order.id) ?? 0) }}
+                </span>
+                <AppIcon name="chevronRight" class="h-4 w-4 shrink-0 text-slate-300" />
+              </div>
             </RouterLink>
           </li>
         </ul>
