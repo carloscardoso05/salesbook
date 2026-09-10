@@ -6,6 +6,7 @@ import ConfirmDialog from '../components/ConfirmDialog.vue'
 import EmptyState from '../components/EmptyState.vue'
 import ModalDialog from '../components/ModalDialog.vue'
 import PageHeader from '../components/PageHeader.vue'
+import SignedMoneyInput from '../components/SignedMoneyInput.vue'
 import { useDatabase, useSalesbook } from '../composables/useDatabase'
 import { useRxQuery } from '../composables/useRxQuery'
 import { errorMessage, toast } from '../composables/useToast'
@@ -17,6 +18,16 @@ import type {
   PaymentDocType,
 } from '../db/types'
 import { formatBRL, formatDateTime, formatSignedBRL } from '../utils/format'
+
+type FinancialEntry =
+  | { kind: 'payment'; id: string; createdAt: string; amount: number; payment: PaymentDocType }
+  | {
+      kind: 'adjustment'
+      id: string
+      createdAt: string
+      amount: number
+      adjustment: AdjustmentDocType
+    }
 
 const route = useRoute()
 const router = useRouter()
@@ -58,6 +69,26 @@ const adjustments = useRxQuery<AdjustmentDocType>(
   [customerId],
 )
 
+const financialEntries = computed<FinancialEntry[]>(() => {
+  const entries: FinancialEntry[] = [
+    ...payments.value.map((payment) => ({
+      kind: 'payment' as const,
+      id: payment.id,
+      createdAt: payment.createdAt,
+      amount: payment.amount,
+      payment,
+    })),
+    ...adjustments.value.map((adjustment) => ({
+      kind: 'adjustment' as const,
+      id: adjustment.id,
+      createdAt: adjustment.createdAt,
+      amount: adjustment.amount,
+      adjustment,
+    })),
+  ]
+  return entries.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+})
+
 const allItems = useRxQuery<OrderItemDocType>(() => db.orderitems.find())
 
 const orderTotals = computed(() => {
@@ -92,6 +123,13 @@ const savingEditAdjust = ref(false)
 
 const adjustmentToRemove = ref<AdjustmentDocType | null>(null)
 const removingAdjust = ref(false)
+
+const editingPayment = ref<PaymentDocType | null>(null)
+const editPaymentAmount = ref<number | null>(null)
+const savingEditPayment = ref(false)
+
+const paymentToRemove = ref<PaymentDocType | null>(null)
+const removingPayment = ref(false)
 
 const adjustDelta = computed(() => {
   if (!customer.value || adjustBalance.value === null) return 0
@@ -197,10 +235,61 @@ async function confirmRemoveAdjustment(): Promise<void> {
   }
 }
 
+function openEditPayment(payment: PaymentDocType): void {
+  editingPayment.value = payment
+  editPaymentAmount.value = payment.amount
+}
+
+async function saveEditPayment(): Promise<void> {
+  if (!editingPayment.value) return
+  savingEditPayment.value = true
+  try {
+    await service.updatePayment(editingPayment.value.id, {
+      amount: Number(editPaymentAmount.value),
+    })
+    toast.success('Pagamento atualizado e saldo ajustado.')
+    editingPayment.value = null
+  } catch (error) {
+    toast.error(errorMessage(error))
+  } finally {
+    savingEditPayment.value = false
+  }
+}
+
+async function confirmRemovePayment(): Promise<void> {
+  if (!paymentToRemove.value) return
+  removingPayment.value = true
+  try {
+    await service.removePayment(paymentToRemove.value.id)
+    toast.success('Pagamento excluído e saldo ajustado.')
+    paymentToRemove.value = null
+  } catch (error) {
+    toast.error(errorMessage(error))
+  } finally {
+    removingPayment.value = false
+  }
+}
+
+function openEditEntry(entry: FinancialEntry): void {
+  if (entry.kind === 'payment') openEditPayment(entry.payment)
+  else openEditAdjustment(entry.adjustment)
+}
+
+function requestRemoveEntry(entry: FinancialEntry): void {
+  if (entry.kind === 'payment') paymentToRemove.value = entry.payment
+  else adjustmentToRemove.value = entry.adjustment
+}
+
 function adjustmentRemovalMessage(): string {
   if (!adjustmentToRemove.value || !customer.value) return ''
   const after = customer.value.balance - adjustmentToRemove.value.amount
   return `Excluir este ajuste de ${formatSignedBRL(adjustmentToRemove.value.amount)} altera o saldo do cliente de ${formatBRL(customer.value.balance)} para ${formatBRL(after)}. Deseja continuar?`
+}
+
+function paymentRemovalMessage(): string {
+  if (!paymentToRemove.value || !customer.value) return ''
+  const after = customer.value.balance - paymentToRemove.value.amount
+  return `Excluir este pagamento de ${formatBRL(paymentToRemove.value.amount)} altera o saldo do cliente de ${formatBRL(customer.value.balance)} para ${formatBRL(after)}. Deseja continuar?`
 }
 </script>
 
@@ -297,63 +386,57 @@ function adjustmentRemovalMessage(): string {
       </section>
 
       <section class="card card-pad">
-        <h2 class="mb-3 text-sm font-semibold text-slate-900">Pagamentos</h2>
-        <EmptyState v-if="payments.length === 0" icon="banknotes" title="Nenhum pagamento" />
+        <h2 class="mb-3 text-sm font-semibold text-slate-900">Histórico financeiro</h2>
+        <EmptyState
+          v-if="financialEntries.length === 0"
+          icon="banknotes"
+          title="Nenhum lançamento"
+          description="Pagamentos e ajustes de saldo aparecem aqui."
+        />
         <ul v-else class="divide-y divide-slate-100">
           <li
-            v-for="payment in payments"
-            :key="payment.id"
-            class="flex items-center justify-between gap-3 py-2.5"
-          >
-            <p class="text-sm text-slate-600">{{ formatDateTime(payment.createdAt) }}</p>
-            <span class="text-sm font-semibold text-emerald-600">
-              {{ formatBRL(payment.amount) }}
-            </span>
-          </li>
-        </ul>
-      </section>
-
-      <section class="card card-pad">
-        <div class="mb-3 flex items-center justify-between">
-          <h2 class="text-sm font-semibold text-slate-900">Ajustes</h2>
-          <button
-            type="button"
-            class="btn btn-ghost btn-icon text-slate-400 hover:text-indigo-600"
-            aria-label="Ajustar saldo"
-            @click="openAdjust"
-          >
-            <AppIcon name="plus" class="h-5 w-5" />
-          </button>
-        </div>
-        <EmptyState v-if="adjustments.length === 0" icon="adjustments" title="Nenhum ajuste" />
-        <ul v-else class="divide-y divide-slate-100">
-          <li
-            v-for="adjustment in adjustments"
-            :key="adjustment.id"
+            v-for="entry in financialEntries"
+            :key="`${entry.kind}-${entry.id}`"
             class="flex items-center gap-2 py-2.5"
           >
-            <p class="min-w-0 flex-1 text-sm text-slate-600">
-              {{ formatDateTime(adjustment.createdAt) }}
-            </p>
+            <AppIcon
+              :name="entry.kind === 'payment' ? 'banknotes' : 'adjustments'"
+              class="h-4 w-4 shrink-0"
+              :class="
+                entry.kind === 'payment'
+                  ? 'text-emerald-500'
+                  : entry.amount < 0
+                    ? 'text-red-400'
+                    : 'text-emerald-500'
+              "
+            />
+            <div class="min-w-0 flex-1">
+              <p class="text-sm font-medium text-slate-800">
+                {{ entry.kind === 'payment' ? 'Pagamento' : 'Ajuste' }}
+              </p>
+              <p class="text-xs text-slate-500">{{ formatDateTime(entry.createdAt) }}</p>
+            </div>
             <span
               class="text-sm font-semibold"
-              :class="adjustment.amount > 0 ? 'text-emerald-600' : 'text-red-600'"
+              :class="
+                entry.kind === 'adjustment' && entry.amount < 0 ? 'text-red-600' : 'text-emerald-600'
+              "
             >
-              {{ formatSignedBRL(adjustment.amount) }}
+              {{ entry.kind === 'adjustment' ? formatSignedBRL(entry.amount) : formatBRL(entry.amount) }}
             </span>
             <button
               type="button"
               class="btn btn-ghost btn-icon text-slate-400 hover:text-indigo-600"
-              aria-label="Editar ajuste"
-              @click="openEditAdjustment(adjustment)"
+              aria-label="Editar lançamento"
+              @click="openEditEntry(entry)"
             >
               <AppIcon name="pencil" class="h-5 w-5" />
             </button>
             <button
               type="button"
               class="btn btn-ghost btn-icon text-slate-400 hover:text-red-600"
-              aria-label="Excluir ajuste"
-              @click="adjustmentToRemove = adjustment"
+              aria-label="Excluir lançamento"
+              @click="requestRemoveEntry(entry)"
             >
               <AppIcon name="trash" class="h-5 w-5" />
             </button>
@@ -400,32 +483,19 @@ function adjustmentRemovalMessage(): string {
     <form class="space-y-4" @submit.prevent="saveAdjust">
       <div>
         <label class="label" for="adjust-balance">Novo saldo (R$)</label>
-        <input
-          id="adjust-balance"
-          v-model.number="adjustBalance"
-          class="input"
-          type="number"
-          step="0.01"
-          required
-        />
+        <SignedMoneyInput id="adjust-balance" v-model="adjustBalance" required />
         <p class="mt-1.5 text-xs text-slate-500">
           Saldo atual: {{ customer ? formatBRL(customer.balance) : '' }}
-        </p>
-        <p
-          class="mt-1 text-xs"
-          :class="
-            adjustDelta === 0
-              ? 'text-slate-500'
-              : adjustDelta > 0
-                ? 'text-emerald-600'
-                : 'text-red-600'
-          "
-        >
-          {{
-            adjustDelta === 0
-              ? 'Sem alteração no saldo.'
-              : 'Diferença: ' + formatSignedBRL(adjustDelta)
-          }}
+          <span
+            class="ml-1"
+            :class="adjustDelta === 0 ? '' : adjustDelta > 0 ? 'text-emerald-600' : 'text-red-600'"
+          >
+            {{
+              adjustDelta === 0
+                ? '· sem alteração'
+                : '· diferença ' + formatSignedBRL(adjustDelta)
+            }}
+          </span>
         </p>
       </div>
       <div class="flex justify-end gap-2">
@@ -447,33 +517,22 @@ function adjustmentRemovalMessage(): string {
     <form class="space-y-4" @submit.prevent="saveEditAdjustment">
       <div>
         <label class="label" for="edit-adjust-balance">Novo saldo (R$)</label>
-        <input
-          id="edit-adjust-balance"
-          v-model.number="editAdjustBalance"
-          class="input"
-          type="number"
-          step="0.01"
-          required
-        />
+        <SignedMoneyInput id="edit-adjust-balance" v-model="editAdjustBalance" required />
         <p class="mt-1.5 text-xs text-slate-500">
           Ajuste atual:
           {{ editingAdjustment ? formatSignedBRL(editingAdjustment.amount) : '' }}
-        </p>
-        <p
-          class="mt-1 text-xs"
-          :class="
-            editAdjustDelta === 0
-              ? 'text-slate-500'
-              : editAdjustDelta > 0
-                ? 'text-emerald-600'
-                : 'text-red-600'
-          "
-        >
-          {{
-            editAdjustDelta === 0
-              ? 'Sem alteração no ajuste.'
-              : 'Novo ajuste: ' + formatSignedBRL(editAdjustDelta)
-          }}
+          <span
+            class="ml-1"
+            :class="
+              editAdjustDelta === 0 ? '' : editAdjustDelta > 0 ? 'text-emerald-600' : 'text-red-600'
+            "
+          >
+            {{
+              editAdjustDelta === 0
+                ? '· sem alteração'
+                : '· novo ajuste ' + formatSignedBRL(editAdjustDelta)
+            }}
+          </span>
         </p>
       </div>
       <div class="flex justify-end gap-2">
@@ -482,6 +541,34 @@ function adjustmentRemovalMessage(): string {
         </button>
         <button type="submit" class="btn btn-primary" :disabled="savingEditAdjust">
           {{ savingEditAdjust ? 'Salvando...' : 'Salvar' }}
+        </button>
+      </div>
+    </form>
+  </ModalDialog>
+
+  <ModalDialog :open="editingPayment !== null" title="Editar pagamento" @close="editingPayment = null">
+    <form class="space-y-4" @submit.prevent="saveEditPayment">
+      <div>
+        <label class="label" for="edit-payment-amount">Valor (R$)</label>
+        <input
+          id="edit-payment-amount"
+          v-model.number="editPaymentAmount"
+          class="input"
+          type="number"
+          min="0.01"
+          step="0.01"
+          required
+        />
+        <p class="mt-1.5 text-xs text-slate-500">
+          A diferença é aplicada automaticamente no saldo do cliente.
+        </p>
+      </div>
+      <div class="flex justify-end gap-2">
+        <button type="button" class="btn btn-secondary" @click="editingPayment = null">
+          Cancelar
+        </button>
+        <button type="submit" class="btn btn-primary" :disabled="savingEditPayment">
+          {{ savingEditPayment ? 'Salvando...' : 'Salvar' }}
         </button>
       </div>
     </form>
@@ -507,5 +594,16 @@ function adjustmentRemovalMessage(): string {
     :busy="removingAdjust"
     @cancel="adjustmentToRemove = null"
     @confirm="confirmRemoveAdjustment"
+  />
+
+  <ConfirmDialog
+    :open="paymentToRemove !== null"
+    title="Excluir pagamento"
+    :message="paymentRemovalMessage()"
+    confirm-label="Excluir"
+    danger
+    :busy="removingPayment"
+    @cancel="paymentToRemove = null"
+    @confirm="confirmRemovePayment"
   />
 </template>

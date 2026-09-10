@@ -6,6 +6,7 @@ import ConfirmDialog from '../components/ConfirmDialog.vue'
 import EmptyState from '../components/EmptyState.vue'
 import ModalDialog from '../components/ModalDialog.vue'
 import PageHeader from '../components/PageHeader.vue'
+import SignedMoneyInput from '../components/SignedMoneyInput.vue'
 import { useDatabase, useSalesbook } from '../composables/useDatabase'
 import { useRxQuery } from '../composables/useRxQuery'
 import { errorMessage, toast } from '../composables/useToast'
@@ -131,16 +132,9 @@ async function confirmRemove(): Promise<void> {
       </div>
       <div>
         <label class="label" for="customer-initial-balance">Saldo inicial (R$)</label>
-        <input
-          id="customer-initial-balance"
-          v-model.number="initialBalance"
-          class="input"
-          type="number"
-          step="0.01"
-          placeholder="0,00"
-        />
+        <SignedMoneyInput id="customer-initial-balance" v-model="initialBalance" />
         <p class="mt-1.5 text-xs text-slate-500">
-          Pode ser negativo. O valor será registrado como um ajuste no histórico.
+          O valor será registrado como um ajuste no histórico.
         </p>
       </div>
       <div class="flex justify-end gap-2">
