@@ -1,17 +1,19 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppIcon from '../components/AppIcon.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import EmptyState from '../components/EmptyState.vue'
 import ModalDialog from '../components/ModalDialog.vue'
 import PageHeader from '../components/PageHeader.vue'
+import SearchInput from '../components/SearchInput.vue'
 import { useDatabase, useSalesbook } from '../composables/useDatabase'
 import { useRxQuery } from '../composables/useRxQuery'
 import { errorMessage, toast } from '../composables/useToast'
 import type { ProductDocType } from '../db/types'
 import { pluralize } from '../utils/format'
 import { stockBadgeClass } from '../utils/stock'
+import { normalizeName } from '../utils/text'
 
 const route = useRoute()
 const router = useRouter()
@@ -21,6 +23,13 @@ const service = useSalesbook()
 const products = useRxQuery<ProductDocType>(() =>
   db.products.find({ sort: [{ nameNormalized: 'asc' }] }),
 )
+
+const searchQuery = ref('')
+const filteredProducts = computed(() => {
+  const term = normalizeName(searchQuery.value)
+  if (!term) return products.value
+  return products.value.filter((product) => product.nameNormalized.includes(term))
+})
 
 const isFormOpen = ref(false)
 const editing = ref<ProductDocType | null>(null)
@@ -92,7 +101,10 @@ async function confirmRemove(): Promise<void> {
 </script>
 
 <template>
-  <PageHeader title="Produtos" :subtitle="pluralize(products.length, 'cadastrado', 'cadastrados')">
+  <PageHeader
+    title="Produtos"
+    :subtitle="pluralize(filteredProducts.length, 'cadastrado', 'cadastrados')"
+  >
     <template #actions>
       <button type="button" class="btn btn-primary" @click="openCreate">
         <AppIcon name="plus" class="h-4 w-4" />
@@ -100,6 +112,13 @@ async function confirmRemove(): Promise<void> {
       </button>
     </template>
   </PageHeader>
+
+  <SearchInput
+    v-if="products.length > 0"
+    v-model="searchQuery"
+    class="mb-4"
+    placeholder="Buscar produto..."
+  />
 
   <EmptyState
     v-if="products.length === 0"
@@ -110,8 +129,19 @@ async function confirmRemove(): Promise<void> {
     <button type="button" class="btn btn-primary" @click="openCreate">Novo produto</button>
   </EmptyState>
 
+  <EmptyState
+    v-else-if="filteredProducts.length === 0"
+    icon="search"
+    title="Nenhum resultado"
+    :description="`Nenhum produto encontrado para “${searchQuery}”.`"
+  />
+
   <ul v-else class="space-y-2.5">
-    <li v-for="product in products" :key="product.id" class="card card-pad flex items-center gap-1">
+    <li
+      v-for="product in filteredProducts"
+      :key="product.id"
+      class="card card-pad flex items-center gap-1"
+    >
       <button
         type="button"
         class="tap-row flex min-w-0 flex-1 items-center gap-3 rounded-xl py-1 text-left"
@@ -152,7 +182,7 @@ async function confirmRemove(): Promise<void> {
           type="text"
           required
           maxlength="200"
-          placeholder="Ex.: Café 500g"
+          placeholder="Ex.: Batom matte 4g"
         />
         <p class="mt-1.5 text-xs text-slate-500">O nome precisa ser único.</p>
       </div>

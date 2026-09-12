@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import AppIcon from '../components/AppIcon.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
@@ -7,11 +7,13 @@ import EmptyState from '../components/EmptyState.vue'
 import ModalDialog from '../components/ModalDialog.vue'
 import MoneyInput from '../components/MoneyInput.vue'
 import PageHeader from '../components/PageHeader.vue'
+import SearchInput from '../components/SearchInput.vue'
 import { useDatabase, useSalesbook } from '../composables/useDatabase'
 import { useRxQuery } from '../composables/useRxQuery'
 import { errorMessage, toast } from '../composables/useToast'
 import type { CustomerDocType } from '../db/types'
 import { formatBRL, pluralize } from '../utils/format'
+import { normalizeName } from '../utils/text'
 
 const db = useDatabase()
 const service = useSalesbook()
@@ -19,6 +21,13 @@ const service = useSalesbook()
 const customers = useRxQuery<CustomerDocType>(() =>
   db.customers.find({ sort: [{ nameNormalized: 'asc' }] }),
 )
+
+const searchQuery = ref('')
+const filteredCustomers = computed(() => {
+  const term = normalizeName(searchQuery.value)
+  if (!term) return customers.value
+  return customers.value.filter((customer) => customer.nameNormalized.includes(term))
+})
 
 const isFormOpen = ref(false)
 const name = ref('')
@@ -62,7 +71,10 @@ async function confirmRemove(): Promise<void> {
 </script>
 
 <template>
-  <PageHeader title="Clientes" :subtitle="pluralize(customers.length, 'cadastrado', 'cadastrados')">
+  <PageHeader
+    title="Clientes"
+    :subtitle="pluralize(filteredCustomers.length, 'cadastrado', 'cadastrados')"
+  >
     <template #actions>
       <button type="button" class="btn btn-primary" @click="openForm">
         <AppIcon name="plus" class="h-4 w-4" />
@@ -70,6 +82,13 @@ async function confirmRemove(): Promise<void> {
       </button>
     </template>
   </PageHeader>
+
+  <SearchInput
+    v-if="customers.length > 0"
+    v-model="searchQuery"
+    class="mb-4"
+    placeholder="Buscar cliente..."
+  />
 
   <EmptyState
     v-if="customers.length === 0"
@@ -80,8 +99,19 @@ async function confirmRemove(): Promise<void> {
     <button type="button" class="btn btn-primary" @click="openForm">Novo cliente</button>
   </EmptyState>
 
+  <EmptyState
+    v-else-if="filteredCustomers.length === 0"
+    icon="search"
+    title="Nenhum resultado"
+    :description="`Nenhum cliente encontrado para “${searchQuery}”.`"
+  />
+
   <ul v-else class="space-y-2.5">
-    <li v-for="customer in customers" :key="customer.id" class="card card-pad flex items-center gap-1">
+    <li
+      v-for="customer in filteredCustomers"
+      :key="customer.id"
+      class="card card-pad flex items-center gap-1"
+    >
       <RouterLink
         :to="`/customers/${customer.id}`"
         class="tap-row flex min-w-0 flex-1 items-center gap-3 rounded-xl py-1"

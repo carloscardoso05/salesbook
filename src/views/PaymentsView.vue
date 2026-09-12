@@ -7,11 +7,14 @@ import EmptyState from '../components/EmptyState.vue'
 import ModalDialog from '../components/ModalDialog.vue'
 import MoneyInput from '../components/MoneyInput.vue'
 import PageHeader from '../components/PageHeader.vue'
+import SearchInput from '../components/SearchInput.vue'
+import SearchSelect from '../components/SearchSelect.vue'
 import { useDatabase, useSalesbook } from '../composables/useDatabase'
 import { useRxQuery } from '../composables/useRxQuery'
 import { errorMessage, toast } from '../composables/useToast'
 import type { CustomerDocType, PaymentDocType } from '../db/types'
 import { formatBRL, formatDateTime, pluralize } from '../utils/format'
+import { normalizeName } from '../utils/text'
 
 const route = useRoute()
 const router = useRouter()
@@ -29,6 +32,19 @@ const customerNames = computed(() => {
   const map = new Map<string, string>()
   for (const customer of customers.value) map.set(customer.id, customer.name)
   return map
+})
+
+const customerOptions = computed(() =>
+  customers.value.map((customer) => ({ id: customer.id, label: customer.name })),
+)
+
+const searchQuery = ref('')
+const filteredPayments = computed(() => {
+  const term = normalizeName(searchQuery.value)
+  if (!term) return payments.value
+  return payments.value.filter((payment) =>
+    normalizeName(customerNames.value.get(payment.customerId) ?? '').includes(term),
+  )
 })
 
 const isFormOpen = ref(false)
@@ -126,7 +142,7 @@ function customerName(customerId: string): string {
 <template>
   <PageHeader
     title="Pagamentos"
-    :subtitle="pluralize(payments.length, 'registrado', 'registrados')"
+    :subtitle="pluralize(filteredPayments.length, 'registrado', 'registrados')"
   >
     <template #actions>
       <button
@@ -145,6 +161,13 @@ function customerName(customerId: string): string {
     Cadastre um cliente antes de registrar pagamentos.
   </p>
 
+  <SearchInput
+    v-if="payments.length > 0"
+    v-model="searchQuery"
+    class="mb-4"
+    placeholder="Buscar por cliente..."
+  />
+
   <EmptyState
     v-if="payments.length === 0"
     icon="banknotes"
@@ -162,8 +185,15 @@ function customerName(customerId: string): string {
     </button>
   </EmptyState>
 
+  <EmptyState
+    v-else-if="filteredPayments.length === 0"
+    icon="search"
+    title="Nenhum resultado"
+    :description="`Nenhum pagamento encontrado para “${searchQuery}”.`"
+  />
+
   <ul v-else class="space-y-2.5">
-    <li v-for="payment in payments" :key="payment.id" class="card card-pad flex items-center gap-2">
+    <li v-for="payment in filteredPayments" :key="payment.id" class="card card-pad flex items-center gap-2">
       <div class="min-w-0 flex-1">
         <p class="truncate text-sm font-semibold text-slate-900">
           {{ customerName(payment.customerId) }}
@@ -196,11 +226,12 @@ function customerName(customerId: string): string {
     <form class="space-y-4" @submit.prevent="submit">
       <div>
         <label class="label" for="payment-customer">Cliente</label>
-        <select id="payment-customer" v-model="selectedCustomerId" class="input" required>
-          <option v-for="customer in customers" :key="customer.id" :value="customer.id">
-            {{ customer.name }}
-          </option>
-        </select>
+        <SearchSelect
+          id="payment-customer"
+          v-model="selectedCustomerId"
+          :options="customerOptions"
+          placeholder="Buscar cliente..."
+        />
       </div>
       <div>
         <label class="label" for="payment-amount">Valor (R$)</label>

@@ -6,6 +6,7 @@ import ConfirmDialog from '../components/ConfirmDialog.vue'
 import EmptyState from '../components/EmptyState.vue'
 import MoneyInput from '../components/MoneyInput.vue'
 import PageHeader from '../components/PageHeader.vue'
+import SearchSelect from '../components/SearchSelect.vue'
 import { useDatabase, useSalesbook } from '../composables/useDatabase'
 import { useRxQuery } from '../composables/useRxQuery'
 import { errorMessage, toast } from '../composables/useToast'
@@ -52,6 +53,15 @@ const productNames = computed(() => {
   for (const product of products.value) map.set(product.id, product.name)
   return map
 })
+
+const productOptions = computed(() =>
+  products.value.map((product) => ({
+    id: product.id,
+    label: product.name,
+    sublabel: pluralize(product.stockQuantity, 'unidade em estoque', 'unidades em estoque'),
+    disabled: product.stockQuantity < 1,
+  })),
+)
 
 const groups = computed<ItemGroup[]>(() => {
   const map = new Map<string, OrderItemDocType[]>()
@@ -301,16 +311,12 @@ function productName(productId: string): string {
         <form class="space-y-4" @submit.prevent="addItem">
           <div>
             <label class="label" for="item-product">Produto</label>
-            <select id="item-product" v-model="selectedProductId" class="input" required>
-              <option
-                v-for="product in products"
-                :key="product.id"
-                :value="product.id"
-                :disabled="product.stockQuantity < 1"
-              >
-                {{ product.name }} ({{ product.stockQuantity }} em estoque)
-              </option>
-            </select>
+            <SearchSelect
+              id="item-product"
+              v-model="selectedProductId"
+              :options="productOptions"
+              placeholder="Buscar produto..."
+            />
           </div>
           <div class="grid grid-cols-2 gap-3">
             <div>

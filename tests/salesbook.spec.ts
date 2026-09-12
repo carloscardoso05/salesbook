@@ -270,7 +270,7 @@ describe('migração do banco', () => {
 describe('addOrderItem', () => {
   it('debita 1 unidade do estoque e o preço do saldo do cliente', async () => {
     const customer = await service.createCustomer('Maria')
-    const product = await service.createProduct('Café', 2)
+    const product = await service.createProduct('Batom matte', 2)
     const order = await service.createOrder(customer.id)
 
     await service.addOrderItem({ orderId: order.id, productId: product.id, priceCents: 1050 })
@@ -282,7 +282,7 @@ describe('addOrderItem', () => {
 
   it('cria um registro de item por unidade vendida', async () => {
     const customer = await service.createCustomer('Maria')
-    const product = await service.createProduct('Café', 2)
+    const product = await service.createProduct('Batom matte', 2)
     const order = await service.createOrder(customer.id)
 
     await service.addOrderItem({ orderId: order.id, productId: product.id, priceCents: 1000 })
@@ -295,7 +295,7 @@ describe('addOrderItem', () => {
 
   it('não permite estoque negativo e não altera o saldo', async () => {
     const customer = await service.createCustomer('Maria')
-    const product = await service.createProduct('Café', 0)
+    const product = await service.createProduct('Batom matte', 0)
     const order = await service.createOrder(customer.id)
 
     await expect(
@@ -309,7 +309,7 @@ describe('addOrderItem', () => {
 
   it('rejeita preço inválido', async () => {
     const customer = await service.createCustomer('Maria')
-    const product = await service.createProduct('Café', 1)
+    const product = await service.createProduct('Batom matte', 1)
     const order = await service.createOrder(customer.id)
 
     await expect(
@@ -324,7 +324,7 @@ describe('addOrderItem', () => {
 describe('addOrderItem com quantidade', () => {
   it('cria um registro por unidade e debita estoque e saldo em lote', async () => {
     const customer = await service.createCustomer('Maria')
-    const product = await service.createProduct('Café', 5)
+    const product = await service.createProduct('Batom matte', 5)
     const order = await service.createOrder(customer.id)
 
     const items = await service.addOrderItem({
@@ -343,7 +343,7 @@ describe('addOrderItem com quantidade', () => {
 
   it('não vende parcialmente quando o estoque é insuficiente', async () => {
     const customer = await service.createCustomer('Maria')
-    const product = await service.createProduct('Café', 2)
+    const product = await service.createProduct('Batom matte', 2)
     const order = await service.createOrder(customer.id)
 
     await expect(
@@ -362,7 +362,7 @@ describe('addOrderItem com quantidade', () => {
 
   it('rejeita quantidade inválida', async () => {
     const customer = await service.createCustomer('Maria')
-    const product = await service.createProduct('Café', 5)
+    const product = await service.createProduct('Batom matte', 5)
     const order = await service.createOrder(customer.id)
 
     await expect(
@@ -390,7 +390,7 @@ describe('addOrderItem com quantidade', () => {
 describe('removeOrderItem', () => {
   it('devolve 1 unidade ao estoque e estorna o preço no saldo', async () => {
     const customer = await service.createCustomer('Maria')
-    const product = await service.createProduct('Café', 2)
+    const product = await service.createProduct('Batom matte', 2)
     const order = await service.createOrder(customer.id)
     const [item] = await service.addOrderItem({
       orderId: order.id,
@@ -409,7 +409,7 @@ describe('removeOrderItem', () => {
 describe('removeOrderItems (em lote)', () => {
   it('devolve estoque e estorna saldo de todas as unidades', async () => {
     const customer = await service.createCustomer('Maria')
-    const product = await service.createProduct('Café', 5)
+    const product = await service.createProduct('Batom matte', 5)
     const order = await service.createOrder(customer.id)
     const items = await service.addOrderItem({
       orderId: order.id,
@@ -427,7 +427,7 @@ describe('removeOrderItems (em lote)', () => {
 
   it('ignora ids inexistentes', async () => {
     const customer = await service.createCustomer('Maria')
-    const product = await service.createProduct('Café', 2)
+    const product = await service.createProduct('Batom matte', 2)
     const order = await service.createOrder(customer.id)
     const items = await service.addOrderItem({
       orderId: order.id,
@@ -448,30 +448,30 @@ describe('removeOrderItems (em lote)', () => {
 describe('removeOrder', () => {
   it('exclui itens em cascata, devolvendo estoque e estornando saldo', async () => {
     const customer = await service.createCustomer('Maria')
-    const coffee = await service.createProduct('Café', 2)
-    const tea = await service.createProduct('Chá', 1)
+    const batom = await service.createProduct('Batom matte', 2)
+    const shampoo = await service.createProduct('Shampoo', 1)
     const order = await service.createOrder(customer.id)
 
-    await service.addOrderItem({ orderId: order.id, productId: coffee.id, priceCents: 1000 })
-    await service.addOrderItem({ orderId: order.id, productId: coffee.id, priceCents: 2000 })
-    await service.addOrderItem({ orderId: order.id, productId: tea.id, priceCents: 500 })
+    await service.addOrderItem({ orderId: order.id, productId: batom.id, priceCents: 1000 })
+    await service.addOrderItem({ orderId: order.id, productId: batom.id, priceCents: 2000 })
+    await service.addOrderItem({ orderId: order.id, productId: shampoo.id, priceCents: 500 })
 
-    expect((await readProduct(coffee.id)).stockQuantity).toBe(0)
-    expect((await readProduct(tea.id)).stockQuantity).toBe(0)
+    expect((await readProduct(batom.id)).stockQuantity).toBe(0)
+    expect((await readProduct(shampoo.id)).stockQuantity).toBe(0)
     expect((await readCustomer(customer.id)).balanceCents).toBe(-3500)
 
     await service.removeOrder(order.id)
 
     expect(await db.orders.count().exec()).toBe(0)
     expect(await db.orderitems.count().exec()).toBe(0)
-    expect((await readProduct(coffee.id)).stockQuantity).toBe(2)
-    expect((await readProduct(tea.id)).stockQuantity).toBe(1)
+    expect((await readProduct(batom.id)).stockQuantity).toBe(2)
+    expect((await readProduct(shampoo.id)).stockQuantity).toBe(1)
     expect((await readCustomer(customer.id)).balanceCents).toBe(0)
   })
 
   it('remove apenas os itens do pedido excluído', async () => {
     const customer = await service.createCustomer('Maria')
-    const product = await service.createProduct('Café', 5)
+    const product = await service.createProduct('Batom matte', 5)
     const orderA = await service.createOrder(customer.id)
     const orderB = await service.createOrder(customer.id)
 
@@ -490,7 +490,7 @@ describe('removeOrder', () => {
 describe('addPayment', () => {
   it('credita o valor no saldo do cliente', async () => {
     const customer = await service.createCustomer('Maria')
-    const product = await service.createProduct('Café', 1)
+    const product = await service.createProduct('Batom matte', 1)
     const order = await service.createOrder(customer.id)
     await service.addOrderItem({ orderId: order.id, productId: product.id, priceCents: 3000 })
 
@@ -542,7 +542,7 @@ describe('updatePayment e removePayment', () => {
 
   it('excluir o pagamento debita o valor do saldo', async () => {
     const customer = await service.createCustomer('Maria')
-    const product = await service.createProduct('Café', 1)
+    const product = await service.createProduct('Batom matte', 1)
     const order = await service.createOrder(customer.id)
     await service.addOrderItem({ orderId: order.id, productId: product.id, priceCents: 3000 })
     const payment = await service.addPayment({ customerId: customer.id, amountCents: 2000 })
@@ -666,7 +666,7 @@ describe('ajustes de saldo', () => {
 describe('precisão decimal', () => {
   it('soma valores com centavos sem artefatos', async () => {
     const customer = await service.createCustomer('Maria')
-    const product = await service.createProduct('Café', 5)
+    const product = await service.createProduct('Batom matte', 5)
     const order = await service.createOrder(customer.id)
 
     await service.addOrderItem({
@@ -684,7 +684,7 @@ describe('precisão decimal', () => {
 
   it('estorna exatamente o valor pago ao excluir os itens', async () => {
     const customer = await service.createCustomer('Maria')
-    const product = await service.createProduct('Café', 3)
+    const product = await service.createProduct('Batom matte', 3)
     const order = await service.createOrder(customer.id)
     const items = await service.addOrderItem({
       orderId: order.id,
@@ -702,7 +702,7 @@ describe('precisão decimal', () => {
 
   it('rejeita valores fracionados de centavo', async () => {
     const customer = await service.createCustomer('Maria')
-    const product = await service.createProduct('Café', 1)
+    const product = await service.createProduct('Batom matte', 1)
     const order = await service.createOrder(customer.id)
 
     await expect(
@@ -726,24 +726,24 @@ describe('nomes únicos (case insensitive)', () => {
   })
 
   it('impede produtos com nomes iguais ignorando maiúsculas', async () => {
-    await service.createProduct('Café 500g')
+    await service.createProduct('Batom matte 4g')
 
-    await expect(service.createProduct('café 500g')).rejects.toBeInstanceOf(DuplicateNameError)
-    await expect(service.createProduct('CAFÉ 500G')).rejects.toBeInstanceOf(DuplicateNameError)
+    await expect(service.createProduct('batom matte 4g')).rejects.toBeInstanceOf(DuplicateNameError)
+    await expect(service.createProduct('BATOM MATTE 4G')).rejects.toBeInstanceOf(DuplicateNameError)
 
-    await service.createProduct('Chá 250g')
+    await service.createProduct('Shampoo 300ml')
     expect(await db.products.count().exec()).toBe(2)
   })
 
   it('permite renomear mantendo o próprio nome com casing diferente', async () => {
     const customer = await service.createCustomer('Maria')
-    const product = await service.createProduct('Café')
+    const product = await service.createProduct('Batom matte')
 
     await service.updateCustomerName(customer.id, 'MARIA')
-    await service.updateProduct(product.id, { name: 'CAFÉ' })
+    await service.updateProduct(product.id, { name: 'BATOM MATTE' })
 
     expect((await readCustomer(customer.id)).name).toBe('MARIA')
-    expect((await readProduct(product.id)).name).toBe('CAFÉ')
+    expect((await readProduct(product.id)).name).toBe('BATOM MATTE')
   })
 
   it('impede renomear para um nome já existente', async () => {
@@ -760,7 +760,7 @@ describe('consultas usadas pela interface', () => {
   it('encontra por id, filtra por referência, ordena e conta', async () => {
     const customer = await service.createCustomer('Maria')
     await service.createCustomer('Ana')
-    const product = await service.createProduct('Café', 3)
+    const product = await service.createProduct('Batom matte', 3)
     const order = await service.createOrder(customer.id)
     await service.addOrderItem({ orderId: order.id, productId: product.id, priceCents: 1000 })
     await service.addPayment({ customerId: customer.id, amountCents: 500 })
@@ -801,7 +801,7 @@ describe('exclusões protegidas', () => {
 
   it('impede excluir produto com itens de pedido', async () => {
     const customer = await service.createCustomer('Maria')
-    const product = await service.createProduct('Café', 1)
+    const product = await service.createProduct('Batom matte', 1)
     const order = await service.createOrder(customer.id)
     await service.addOrderItem({ orderId: order.id, productId: product.id, priceCents: 1000 })
 
@@ -811,7 +811,7 @@ describe('exclusões protegidas', () => {
 
   it('permite excluir cliente e produto sem vínculos', async () => {
     const customer = await service.createCustomer('Maria')
-    const product = await service.createProduct('Café', 3)
+    const product = await service.createProduct('Batom matte', 3)
 
     await service.removeCustomer(customer.id)
     await service.removeProduct(product.id)

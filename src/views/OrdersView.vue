@@ -6,11 +6,14 @@ import ConfirmDialog from '../components/ConfirmDialog.vue'
 import EmptyState from '../components/EmptyState.vue'
 import ModalDialog from '../components/ModalDialog.vue'
 import PageHeader from '../components/PageHeader.vue'
+import SearchInput from '../components/SearchInput.vue'
+import SearchSelect from '../components/SearchSelect.vue'
 import { useDatabase, useSalesbook } from '../composables/useDatabase'
 import { useRxQuery } from '../composables/useRxQuery'
 import { errorMessage, toast } from '../composables/useToast'
 import type { CustomerDocType, OrderDocType, OrderItemDocType } from '../db/types'
 import { formatBRL, formatDateTime, pluralize } from '../utils/format'
+import { normalizeName } from '../utils/text'
 
 const db = useDatabase()
 const service = useSalesbook()
@@ -38,6 +41,19 @@ const orderSummaries = computed(() => {
     total.set(item.orderId, (total.get(item.orderId) ?? 0) + item.priceCents)
   }
   return { count, total }
+})
+
+const customerOptions = computed(() =>
+  customers.value.map((customer) => ({ id: customer.id, label: customer.name })),
+)
+
+const searchQuery = ref('')
+const filteredOrders = computed(() => {
+  const term = normalizeName(searchQuery.value)
+  if (!term) return orders.value
+  return orders.value.filter((order) =>
+    normalizeName(customerNames.value.get(order.customerId) ?? '').includes(term),
+  )
 })
 
 const isFormOpen = ref(false)
@@ -85,7 +101,7 @@ function customerName(customerId: string): string {
 </script>
 
 <template>
-  <PageHeader title="Pedidos" :subtitle="pluralize(orders.length, 'registrado', 'registrados')">
+  <PageHeader title="Pedidos" :subtitle="pluralize(filteredOrders.length, 'registrado', 'registrados')">
     <template #actions>
       <button
         type="button"
@@ -102,6 +118,13 @@ function customerName(customerId: string): string {
   <p v-if="customers.length === 0" class="mb-4 text-sm text-slate-500">
     Cadastre um cliente antes de criar pedidos.
   </p>
+
+  <SearchInput
+    v-if="orders.length > 0"
+    v-model="searchQuery"
+    class="mb-4"
+    placeholder="Buscar por cliente..."
+  />
 
   <EmptyState
     v-if="orders.length === 0"
@@ -120,8 +143,15 @@ function customerName(customerId: string): string {
     </button>
   </EmptyState>
 
+  <EmptyState
+    v-else-if="filteredOrders.length === 0"
+    icon="search"
+    title="Nenhum resultado"
+    :description="`Nenhum pedido encontrado para “${searchQuery}”.`"
+  />
+
   <ul v-else class="space-y-2.5">
-    <li v-for="order in orders" :key="order.id" class="card card-pad flex items-center gap-1">
+    <li v-for="order in filteredOrders" :key="order.id" class="card card-pad flex items-center gap-1">
       <RouterLink
         :to="`/orders/${order.id}`"
         class="tap-row flex min-w-0 flex-1 items-center gap-3 rounded-xl py-1"
@@ -155,11 +185,12 @@ function customerName(customerId: string): string {
     <form class="space-y-4" @submit.prevent="submit">
       <div>
         <label class="label" for="order-customer">Cliente</label>
-        <select id="order-customer" v-model="selectedCustomerId" class="input" required>
-          <option v-for="customer in customers" :key="customer.id" :value="customer.id">
-            {{ customer.name }}
-          </option>
-        </select>
+        <SearchSelect
+          id="order-customer"
+          v-model="selectedCustomerId"
+          :options="customerOptions"
+          placeholder="Buscar cliente..."
+        />
       </div>
       <div class="flex justify-end gap-2">
         <button type="button" class="btn btn-secondary" @click="isFormOpen = false">
