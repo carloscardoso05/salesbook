@@ -74,6 +74,11 @@ function onTriggerKeydown(event: KeyboardEvent): void {
   if (event.key === 'Escape') closeList()
 }
 
+function onSearchInput(event: Event): void {
+  query.value = (event.target as HTMLInputElement).value
+  highlight.value = filtered.value.length > 0 ? 0 : -1
+}
+
 function onListKeydown(event: KeyboardEvent): void {
   if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
     event.preventDefault()
@@ -151,14 +156,18 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onDocumentPoin
         />
         <input
           ref="searchRef"
-          v-model="query"
+          :value="query"
           type="text"
           class="input pl-9"
           :placeholder="searchPlaceholder"
           autocomplete="off"
+          autocorrect="off"
+          autocapitalize="off"
+          spellcheck="false"
           role="combobox"
           aria-expanded="true"
           aria-controls="searchselect-listbox"
+          @input="onSearchInput"
           @keydown="onListKeydown"
         />
       </div>
